@@ -1,4 +1,4 @@
-import { ProductItem, Client, RecentSale, ScheduleItem, RBACRole } from '../types';
+import { ProductItem, Client, RecentSale, ScheduleItem, RBACRole, CompletedSaleData, DREData } from '../types';
 
 export const INITIAL_PRODUCTS: ProductItem[] = [
   {
@@ -894,3 +894,329 @@ export const RBAC_ROLES: RBACRole[] = [
     ]
   }
 ];
+
+export const INITIAL_COMPLETED_SALES: CompletedSaleData[] = [
+  {
+    id: 'sale-101',
+    orderNumber: 'PED-48920',
+    nfceNumber: '000.104.912',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4892 0104 9121',
+    protocol: '14126008920194',
+    timestamp: '27/09/2026 14:28:10',
+    subtotal: 2580.00,
+    discount: 130.00,
+    couponCode: 'PINTOR5',
+    total: 2450.00,
+    paymentMethod: 'PIX DINÂMICO',
+    receivedAmount: 2450.00,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[0], // Engenharia Rocha & Filhos
+    items: [
+      { product: INITIAL_PRODUCTS[0], quantity: 3 }, // Suvinil Fosco 18L
+      { product: INITIAL_PRODUCTS[4], quantity: 2 }, // Selador Acrílico 18L
+      { product: INITIAL_PRODUCTS[5], quantity: 4 }, // Rolo Microfibra 23cm
+    ]
+  },
+  {
+    id: 'sale-102',
+    orderNumber: 'PED-48919',
+    nfceNumber: '000.104.911',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4891 9104 9118',
+    protocol: '14126008919245',
+    timestamp: '27/09/2026 14:15:32',
+    subtotal: 920.00,
+    discount: 30.00,
+    total: 890.00,
+    paymentMethod: 'CARTÃO DE CRÉDITO 3X',
+    receivedAmount: 890.00,
+    changeAmount: 0.00,
+    operatorName: 'Ana Paula',
+    client: INITIAL_CLIENTS[1], // Carlos Pereira Reformas
+    items: [
+      { product: INITIAL_PRODUCTS[1], quantity: 2 }, // Esmalte Sintético 3.6L
+      { product: INITIAL_PRODUCTS[7], quantity: 3 }, // Aguarrás 900ml
+      { product: INITIAL_PRODUCTS[17], quantity: 5 }, // Fita Crepe 24mm 3M
+    ]
+  },
+  {
+    id: 'sale-103',
+    orderNumber: 'PED-48918',
+    nfceNumber: '000.104.910',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4891 8104 9104',
+    protocol: '14126008918389',
+    timestamp: '27/09/2026 13:58:05',
+    subtotal: 145.50,
+    discount: 0.00,
+    total: 145.50,
+    paymentMethod: 'DINHEIRO',
+    receivedAmount: 150.00,
+    changeAmount: 4.50,
+    operatorName: 'Marcos Silva',
+    client: {
+      id: 'cli-balcao',
+      code: '#BALCAO',
+      name: 'Consumidor Final (Balcão)',
+      doc: '000.000.000-00',
+      docType: 'CPF',
+      segment: 'Balcão Varejo',
+      creditLimit: 0,
+      creditUsed: 0,
+      paymentTerm: 'À Vista',
+      score: 'N/A',
+      scorePercent: 100,
+      status: 'liberado',
+      openInvoices: 0,
+      openAmount: 0,
+      email: 'contato@loja.com.br',
+      phone: '(11) 98888-0000',
+      pixKey: '',
+      duplicatas: []
+    },
+    items: [
+      { product: INITIAL_PRODUCTS[5], quantity: 2 }, // Rolo Microfibra 23cm
+      { product: INITIAL_PRODUCTS[17], quantity: 3 }, // Fita Crepe 3M
+    ]
+  },
+  {
+    id: 'sale-104',
+    orderNumber: 'PED-48917',
+    nfceNumber: '000.104.909',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4891 7104 9091',
+    protocol: '14126008917412',
+    timestamp: '27/09/2026 13:40:44',
+    subtotal: 5980.00,
+    discount: 260.00,
+    total: 5720.00,
+    paymentMethod: 'FATURADO 30D',
+    receivedAmount: 5720.00,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[2], // Construtora Aliança Metropolitana S/A
+    items: [
+      { product: INITIAL_PRODUCTS[2], quantity: 8 }, // Resina Impermeabilizante 18L
+      { product: INITIAL_PRODUCTS[6], quantity: 15 }, // Massa Corrida Balde 25kg
+      { product: INITIAL_PRODUCTS[0], quantity: 4 }, // Tinta Acrílica Suvinil 18L
+    ]
+  },
+  {
+    id: 'sale-105',
+    orderNumber: 'PED-48916',
+    nfceNumber: '000.104.908',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4891 6104 9087',
+    protocol: '14126008916578',
+    timestamp: '27/09/2026 11:22:18',
+    subtotal: 1350.00,
+    discount: 67.50,
+    couponCode: 'PINTOR5',
+    total: 1282.50,
+    paymentMethod: 'CARTÃO DE DÉBITO',
+    receivedAmount: 1282.50,
+    changeAmount: 0.00,
+    operatorName: 'Ana Paula',
+    client: INITIAL_CLIENTS[1], // Carlos Pereira
+    items: [
+      { product: INITIAL_PRODUCTS[14], quantity: 6 }, // Massa Poliéster Automotiva 1kg
+      { product: INITIAL_PRODUCTS[15], quantity: 5 }, // Primer PU 4:1 Maxi Rubber
+      { product: INITIAL_PRODUCTS[18], quantity: 4 }, // Massa de Polir 3M
+    ]
+  },
+  {
+    id: 'sale-106',
+    orderNumber: 'PED-48915',
+    nfceNumber: '000.104.907',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4891 5104 9073',
+    protocol: '14126008915891',
+    timestamp: '27/09/2026 09:45:12',
+    subtotal: 3120.00,
+    discount: 120.00,
+    total: 3000.00,
+    paymentMethod: 'PIX DINÂMICO',
+    receivedAmount: 3000.00,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[4], // Souza & Mendes Pinturas Industriais
+    items: [
+      { product: INITIAL_PRODUCTS[3], quantity: 6 }, // Verniz Copal Marítimo 3.6L
+      { product: INITIAL_PRODUCTS[2], quantity: 4 }, // Resina Impermeabilizante 18L
+      { product: INITIAL_PRODUCTS[19], quantity: 8 }, // Thinner PU 900ml
+    ]
+  },
+  {
+    id: 'sale-107',
+    orderNumber: 'PED-48894',
+    nfceNumber: '000.104.886',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4889 4104 8864',
+    protocol: '14126008894129',
+    timestamp: '26/09/2026 16:50:30',
+    subtotal: 4200.00,
+    discount: 210.00,
+    couponCode: 'PINTOR5',
+    total: 3990.00,
+    paymentMethod: 'CARTÃO DE CRÉDITO',
+    receivedAmount: 3990.00,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[0], // Engenharia Rocha
+    items: [
+      { product: INITIAL_PRODUCTS[0], quantity: 6 }, // Tinta Acrílica Suvinil 18L
+      { product: INITIAL_PRODUCTS[4], quantity: 4 }, // Selador Acrílico 18L
+      { product: INITIAL_PRODUCTS[6], quantity: 8 }, // Massa Corrida 25kg
+    ]
+  },
+  {
+    id: 'sale-108',
+    orderNumber: 'PED-48893',
+    nfceNumber: '000.104.885',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4889 3104 8851',
+    protocol: '14126008893452',
+    timestamp: '26/09/2026 15:10:15',
+    subtotal: 840.00,
+    discount: 40.00,
+    total: 800.00,
+    paymentMethod: 'DINHEIRO',
+    receivedAmount: 800.00,
+    changeAmount: 0.00,
+    operatorName: 'Ana Paula',
+    client: {
+      id: 'cli-balcao-2',
+      code: '#BALCAO',
+      name: 'Roberto Silveira (Pintor Pro)',
+      doc: '219.405.811-90',
+      docType: 'CPF',
+      segment: 'Profissional Pintura',
+      creditLimit: 5000,
+      creditUsed: 0,
+      paymentTerm: 'À Vista',
+      score: 'Score A',
+      scorePercent: 92,
+      status: 'liberado',
+      openInvoices: 0,
+      openAmount: 0,
+      email: 'roberto.silveira@outlook.com',
+      phone: '(11) 98411-2233',
+      pixKey: '219.405.811-90',
+      duplicatas: []
+    },
+    items: [
+      { product: INITIAL_PRODUCTS[1], quantity: 3 }, // Esmalte Sintético 3.6L
+      { product: INITIAL_PRODUCTS[5], quantity: 5 }, // Rolo 23cm
+      { product: INITIAL_PRODUCTS[7], quantity: 4 }, // Aguarrás 900ml
+    ]
+  },
+  {
+    id: 'sale-109',
+    orderNumber: 'PED-48890',
+    nfceNumber: '000.104.882',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4889 0104 8820',
+    protocol: '14126008890214',
+    timestamp: '26/09/2026 11:30:22',
+    subtotal: 1890.00,
+    discount: 94.50,
+    total: 1795.50,
+    paymentMethod: 'PIX DINÂMICO',
+    receivedAmount: 1795.50,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[3], // Studio Decor
+    items: [
+      { product: INITIAL_PRODUCTS[0], quantity: 2 }, // Suvinil Fosco 18L
+      { product: INITIAL_PRODUCTS[2], quantity: 2 }, // Resina 18L
+    ]
+  },
+  {
+    id: 'sale-110',
+    orderNumber: 'PED-48842',
+    nfceNumber: '000.104.834',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4884 2104 8349',
+    protocol: '14126008842918',
+    timestamp: '25/09/2026 14:18:45',
+    subtotal: 6450.00,
+    discount: 300.00,
+    total: 6150.00,
+    paymentMethod: 'FATURADO 30D',
+    receivedAmount: 6150.00,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[2], // Construtora Aliança
+    items: [
+      { product: INITIAL_PRODUCTS[0], quantity: 8 }, // Tinta Suvinil 18L
+      { product: INITIAL_PRODUCTS[4], quantity: 5 }, // Selador 18L
+      { product: INITIAL_PRODUCTS[6], quantity: 12 }, // Massa Corrida 25kg
+      { product: INITIAL_PRODUCTS[17], quantity: 20 }, // Fita Crepe 3M
+    ]
+  },
+  {
+    id: 'sale-111',
+    orderNumber: 'PED-48810',
+    nfceNumber: '000.104.802',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4881 0104 8023',
+    protocol: '14126008810982',
+    timestamp: '24/09/2026 10:05:14',
+    subtotal: 750.00,
+    discount: 0.00,
+    total: 750.00,
+    paymentMethod: 'CARTÃO DE DÉBITO',
+    receivedAmount: 750.00,
+    changeAmount: 0.00,
+    operatorName: 'Ana Paula',
+    client: INITIAL_CLIENTS[1], // Carlos Pereira
+    items: [
+      { product: INITIAL_PRODUCTS[15], quantity: 5 }, // Primer PU 4:1
+      { product: INITIAL_PRODUCTS[19], quantity: 5 }, // Thinner PU 900ml
+    ]
+  },
+  {
+    id: 'sale-112',
+    orderNumber: 'PED-48765',
+    nfceNumber: '000.104.757',
+    series: '001',
+    accessKey: '4126 0918 2918 0200 0190 6500 1000 4876 5104 7578',
+    protocol: '14126008765412',
+    timestamp: '22/09/2026 15:40:00',
+    subtotal: 2100.00,
+    discount: 105.00,
+    total: 1995.00,
+    paymentMethod: 'PIX DIRETO',
+    receivedAmount: 1995.00,
+    changeAmount: 0.00,
+    operatorName: 'Marcos Silva',
+    client: INITIAL_CLIENTS[4], // Souza & Mendes
+    items: [
+      { product: INITIAL_PRODUCTS[2], quantity: 4 }, // Resina Impermeabilizante 18L
+      { product: INITIAL_PRODUCTS[3], quantity: 2 }, // Verniz Marítimo
+    ]
+  }
+];
+
+export const INITIAL_DRE_DATA: DREData = {
+  periodLabel: 'Exercício Gerencial Consolidado (Mês Corrente)',
+  exercicio: '2023',
+  faturamentoBruto: 382400.00,
+  deducoesImpostos: 34416.00,
+  cmv: 195200.00,
+  despesasPessoal: 48200.00,
+  despesasLogistica: 24134.00,
+  despesasFinanceiras: 16800.00,
+  depreciacao: 8800.00,
+  outrasDespesas: 0,
+  outrasReceitas: 0,
+  saldoGeralContas: 318420.50,
+  contasAReceber: 245800.00,
+  contasAPagar: 182150.00,
+  lastUpdated: 'Hoje, 14:30',
+  sourceFileName: 'Sistema ERP / Padrão MarquesColor',
+  sourceFileType: 'manual'
+};
+

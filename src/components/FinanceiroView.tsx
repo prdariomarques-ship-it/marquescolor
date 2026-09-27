@@ -1,17 +1,40 @@
 import React, { useState } from 'react';
-import { ScheduleItem } from '../types';
+import { ScheduleItem, DREData } from '../types';
 
 interface FinanceiroViewProps {
   scheduleItems: ScheduleItem[];
   onOpenNewExpenseModal: () => void;
+  dreData: DREData;
+  onUpdateDRE: (newDre: DREData) => void;
+  onOpenImportModal: () => void;
 }
 
 export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
   scheduleItems,
   onOpenNewExpenseModal,
+  dreData,
+  onUpdateDRE,
+  onOpenImportModal,
 }) => {
   const [period, setPeriod] = useState<'hoje' | 'semana' | 'mes' | 'trimestre' | 'ano'>('mes');
   const [items, setItems] = useState<ScheduleItem[]>(scheduleItems);
+
+  // Sync items when parent updates them
+  React.useEffect(() => {
+    setItems(scheduleItems);
+  }, [scheduleItems]);
+
+  // Derived DRE Calculations
+  const receitaLiquida = Math.max(0, dreData.faturamentoBruto - dreData.deducoesImpostos);
+  const lucroBruto = receitaLiquida - dreData.cmv;
+  const margemBruta = receitaLiquida > 0 ? (lucroBruto / receitaLiquida) * 100 : 0;
+  const despesasOperacionais =
+    dreData.despesasPessoal +
+    dreData.despesasLogistica +
+    dreData.despesasFinanceiras;
+  const ebitda = lucroBruto - despesasOperacionais;
+  const lucroLiquido = ebitda - dreData.depreciacao - (dreData.outrasDespesas || 0) + (dreData.outrasReceitas || 0);
+  const margemLiquida = dreData.faturamentoBruto > 0 ? (lucroLiquido / dreData.faturamentoBruto) * 100 : 0;
 
   const handlePayItem = (id: string) => {
     setItems(prev => prev.map(item => {
@@ -37,11 +60,17 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
               Módulo Financeiro & Fluxo de Caixa
             </h1>
             <span className="bg-[#57dffe]/30 text-[#004e5c] text-xs px-2.5 py-0.5 rounded-full font-bold">
-              Exercício 2023
+              Exercício {dreData.exercicio || '2023'}
             </span>
+            {dreData.sourceFileName && (
+              <span className="hidden sm:inline-flex items-center gap-1 text-[11px] font-mono text-[#00687a] bg-[#e7eeff] px-2 py-0.5 rounded border border-[#dee8ff]">
+                <span className="material-symbols-outlined text-xs">sync</span>
+                {dreData.sourceFileName}
+              </span>
+            )}
           </div>
           <p className="text-xs text-[#44474d] mt-0.5 max-w-4xl">
-            Visão unificada de contas a pagar, contas a receber, conciliação bancária, despesas com fornecedores de tintas (Suvinil, Coral, Lukscolor) e DRE gerencial.
+            Visão unificada de contas a pagar, contas a receber, conciliação bancária, despesas com fornecedores de tintas (Suvinil, Coral, Lukscolor) e DRE gerencial alimentado por planilhas, PDFs, CSVs e Markdown.
           </p>
         </div>
 
@@ -62,6 +91,16 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
               </button>
             ))}
           </div>
+
+          {/* MAIN IMPORT BUTTON: PLANILHA / PDF / CSV / MD */}
+          <button
+            onClick={onOpenImportModal}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#00687a] hover:bg-[#004e5c] text-white font-bold text-xs rounded-lg shadow-sm transition-all cursor-pointer ring-2 ring-[#57dffe]/40"
+            title="Importar Planilhas Excel (.xlsx), Relatórios PDF, Arquivos CSV ou Tabelas Markdown (.md)"
+          >
+            <span className="material-symbols-outlined text-base text-[#57dffe]">upload_file</span>
+            <span>Importar Planilha / PDF / CSV / MD</span>
+          </button>
 
           <button
             onClick={() => alert('Arquivo OFX de extrato bancário importado e conciliado com 100% de paridade.')}
@@ -89,6 +128,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
         </div>
       </section>
 
+
       {/* 4 TOP FINANCIAL INDICATOR CARDS */}
       <section className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {/* Card 1: Saldo Geral em Contas */}
@@ -99,7 +139,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 Saldo Geral em Contas
               </span>
               <div className="text-[22px] font-mono font-bold text-[#001229] mt-1 tracking-tight">
-                R$ 318.420,50
+                R$ {dreData.saldoGeralContas.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="w-9 h-9 rounded-lg bg-[#f0f3ff] flex items-center justify-center text-[#00687a] border border-[#c4c6ce]/30">
@@ -122,7 +162,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 Contas a Receber (Mês)
               </span>
               <div className="text-[22px] font-mono font-bold text-emerald-700 mt-1 tracking-tight">
-                R$ 245.800,00
+                R$ {dreData.contasAReceber.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-700 border border-emerald-200">
@@ -145,7 +185,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 Contas a Pagar (Mês)
               </span>
               <div className="text-[22px] font-mono font-bold text-[#ba1a1a] mt-1 tracking-tight">
-                R$ 182.150,00
+                R$ {dreData.contasAPagar.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="w-9 h-9 rounded-lg bg-[#ffdad6]/40 flex items-center justify-center text-[#ba1a1a] border border-[#ffdad6]">
@@ -166,7 +206,7 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 Lucro Líquido Operacional
               </span>
               <div className="text-[22px] font-mono font-bold text-[#001229] mt-1 tracking-tight">
-                R$ 63.650,00
+                R$ {lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
             </div>
             <div className="w-9 h-9 rounded-lg bg-[#57dffe]/20 flex items-center justify-center text-[#00687a] border border-[#57dffe]/40">
@@ -175,12 +215,18 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
           </div>
           <div className="mt-3 pt-2.5 border-t border-[#c4c6ce]/30 flex items-center justify-between text-xs">
             <span className="text-[#44474d]">Margem calculada:</span>
-            <span className="px-2 py-0.2 rounded-full bg-emerald-100 text-emerald-800 text-xs font-bold font-mono flex items-center gap-1">
-              <span className="material-symbols-outlined text-xs">check_circle</span> 16,8% Positivo
+            <span className={`px-2 py-0.2 rounded-full text-xs font-bold font-mono flex items-center gap-1 ${
+              lucroLiquido >= 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-red-100 text-red-800'
+            }`}>
+              <span className="material-symbols-outlined text-xs">
+                {lucroLiquido >= 0 ? 'check_circle' : 'warning'}
+              </span>
+              {margemLiquida.toFixed(1)}% {lucroLiquido >= 0 ? 'Positivo' : 'Abaixo'}
             </span>
           </div>
         </div>
       </section>
+
 
       {/* CENTRAL SPLIT WORKSPACE (60% ESQUERDA / 40% DIREITA) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -389,11 +435,22 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                   <span className="material-symbols-outlined text-[#00687a]">table_chart</span>
                   Demonstrativo de Resultados (DRE)
                 </h2>
-                <span className="text-xs text-[#44474d]">Exercício Gerencial Consolidado (Mês Corrente)</span>
+                <span className="text-xs text-[#44474d]">{dreData.periodLabel || 'Exercício Gerencial Consolidado (Mês Corrente)'}</span>
               </div>
-              <span className="px-2 py-0.5 rounded bg-[#dee8ff] text-[#001229] text-[10px] font-bold">
-                OFICIAL
-              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={onOpenImportModal}
+                  className="px-2 py-1 rounded bg-[#00687a] hover:bg-[#004e5c] text-white text-[10px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-xs"
+                  title="Alimentar este DRE via Planilha, PDF, CSV ou Markdown"
+                >
+                  <span className="material-symbols-outlined text-xs">publish</span>
+                  Alimentar DRE
+                </button>
+                <span className="px-2 py-0.5 rounded bg-[#dee8ff] text-[#001229] text-[10px] font-bold">
+                  OFICIAL
+                </span>
+              </div>
             </div>
 
             {/* DRE Structure */}
@@ -403,65 +460,85 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                   <span className="w-2 h-2 rounded-full bg-[#001229]"></span>
                   (=) Faturamento Bruto de Tintas & Tintometria
                 </span>
-                <span className="font-mono text-[#001229]">R$ 382.400,00</span>
+                <span className="font-mono text-[#001229]">
+                  R$ {dreData.faturamentoBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#44474d] border-b border-[#c4c6ce]/20">
                 <span className="pl-3 flex items-center gap-1">
                   <span className="text-[#ba1a1a] font-bold">(-)</span> Deduções de Venda & Impostos
                 </span>
-                <span className="font-mono text-[#ba1a1a]">- R$ 34.416,00</span>
+                <span className="font-mono text-[#ba1a1a]">
+                  - R$ {dreData.deducoesImpostos.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#001229] font-semibold">
                 <span className="pl-2">(=) Receita Operacional Líquida</span>
-                <span className="font-mono">R$ 347.984,00</span>
+                <span className="font-mono">
+                  R$ {receitaLiquida.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#44474d] border-b border-[#c4c6ce]/20">
                 <span className="pl-3 flex items-center gap-1">
                   <span className="text-[#ba1a1a] font-bold">(-)</span> CMV Tintas & Bases
                 </span>
-                <span className="font-mono text-[#ba1a1a]">- R$ 195.200,00</span>
+                <span className="font-mono text-[#ba1a1a]">
+                  - R$ {dreData.cmv.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between p-2 rounded bg-emerald-50/70 border border-emerald-100 font-bold">
                 <span className="text-emerald-900 flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm text-emerald-700">account_balance_wallet</span>
-                  (=) Lucro Bruto Operacional (Margem 43,9%)
+                  (=) Lucro Bruto Operacional (Margem {margemBruta.toFixed(1)}%)
                 </span>
-                <span className="font-mono text-emerald-800">R$ 152.784,00</span>
+                <span className="font-mono text-emerald-800">
+                  R$ {lucroBruto.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#44474d]">
                 <span className="pl-3 flex items-center gap-1">
                   <span className="text-[#ba1a1a] font-bold">(-)</span> Pessoal & Balcão
                 </span>
-                <span className="font-mono text-[#ba1a1a]">- R$ 48.200,00</span>
+                <span className="font-mono text-[#ba1a1a]">
+                  - R$ {dreData.despesasPessoal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#44474d]">
                 <span className="pl-3 flex items-center gap-1">
                   <span className="text-[#ba1a1a] font-bold">(-)</span> Logística & Frota
                 </span>
-                <span className="font-mono text-[#ba1a1a]">- R$ 24.134,00</span>
+                <span className="font-mono text-[#ba1a1a]">
+                  - R$ {dreData.despesasLogistica.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#44474d] border-b border-[#c4c6ce]/20">
                 <span className="pl-3 flex items-center gap-1">
                   <span className="text-[#ba1a1a] font-bold">(-)</span> Financeiras & Cartões
                 </span>
-                <span className="font-mono text-[#ba1a1a]">- R$ 16.800,00</span>
+                <span className="font-mono text-[#ba1a1a]">
+                  - R$ {dreData.despesasFinanceiras.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#001229] font-semibold">
                 <span className="pl-2">(=) EBITDA (Lucro Operacional)</span>
-                <span className="font-mono">R$ 72.450,00</span>
+                <span className="font-mono">
+                  R$ {ebitda.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               <div className="flex items-center justify-between px-3 py-1 text-[#44474d] border-b border-[#c4c6ce]/20">
                 <span className="pl-3">(-) Depreciação Misturadores</span>
-                <span className="font-mono text-[#ba1a1a]">- R$ 8.800,00</span>
+                <span className="font-mono text-[#ba1a1a]">
+                  - R$ {dreData.depreciacao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
               </div>
 
               {/* Final Net Profit */}
@@ -471,8 +548,12 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                   <span className="text-xs">(=) LUCRO LÍQUIDO DO EXERCÍCIO</span>
                 </div>
                 <div className="text-right">
-                  <div className="text-[18px] font-mono text-[#57dffe]">R$ 63.650,00</div>
-                  <div className="text-[10px] text-[#798fb1] font-normal">Margem Líquida: 16,8%</div>
+                  <div className="text-[18px] font-mono text-[#57dffe]">
+                    R$ {lucroLiquido.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </div>
+                  <div className="text-[10px] text-[#798fb1] font-normal">
+                    Margem Líquida: {margemLiquida.toFixed(1)}%
+                  </div>
                 </div>
               </div>
             </div>
@@ -485,9 +566,12 @@ export const FinanceiroView: React.FC<FinanceiroViewProps> = ({
                 <span className="material-symbols-outlined text-sm">file_download</span>
                 Exportar Balancete Contábil (.XLSX)
               </button>
-              <span className="text-[11px] font-mono text-[#44474d]">Validação: Automática (ERP)</span>
+              <span className="text-[11px] font-mono text-[#44474d]">
+                Origem: {dreData.sourceFileName || 'Sistema ERP'}
+              </span>
             </div>
           </div>
+
 
           {/* Card 2: Distribuição de Despesas por Centro de Custo */}
           <div className="bg-white border border-[#c4c6ce]/60 rounded-xl p-5 shadow-xs">

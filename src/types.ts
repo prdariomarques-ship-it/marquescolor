@@ -187,3 +187,42 @@ export interface CompletedSaleData {
   client: Client;
   operatorName?: string;
 }
+
+export type ImportSystemTarget = 'dre' | 'contas' | 'estoque' | 'vendas';
+
+export interface DREData {
+  periodLabel: string;
+  exercicio: string;
+  faturamentoBruto: number;
+  deducoesImpostos: number;
+  cmv: number;
+  despesasPessoal: number;
+  despesasLogistica: number;
+  despesasFinanceiras: number;
+  depreciacao: number;
+  outrasDespesas?: number;
+  outrasReceitas?: number;
+  saldoGeralContas: number;
+  contasAReceber: number;
+  contasAPagar: number;
+  lastUpdated?: string;
+  sourceFileName?: string;
+  sourceFileType?: 'excel' | 'pdf' | 'csv' | 'markdown' | 'manual';
+}
+
+export interface StockToastItem {
+  id: string;
+  productId: string;
+  productName: string;
+  sku: string;
+  brand: string;
+  swatchHex?: string;
+  swatchDot?: string;
+  currentStock: number;
+  minStock: number;
+  stockUnit: string;
+  timestamp: string;
+  type: 'critical' | 'out_of_stock' | 'warning';
+  title?: string;
+  message?: string;
+}

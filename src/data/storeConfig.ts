@@ -1,0 +1,17 @@
+export const STORE_CONFIG = {
+  name: 'MARQUESCOLOR TINTAS',
+  companyName: 'MARQUESCOLOR TINTAS & REVESTIMENTOS',
+  address: 'Rodovia Índio Tibiriçá, 2639',
+  neighborhood: 'Ouro Fino Paulista',
+  city: 'Ribeirão Pires',
+  state: 'SP',
+  fullAddress: 'Rodovia Índio Tibiriçá, 2639 - Ouro Fino Paulista - Ribeirão Pires - SP',
+  phone: '(11) 4823-9102',
+  cnpj: '17.758.633/0001-66',
+  cnpjRaw: '17758633000166',
+  isFiscal: false,
+  receiptTitle: 'CUPOM NÃO FISCAL',
+  receiptSubtitle: 'COMPROVANTE DE VENDA NÃO FISCAL',
+  legalNotice: 'NÃO É DOCUMENTO FISCAL - NÃO COMPROVA RECOLHIMENTO DE TRIBUTOS',
+  policyNotice: 'Trocas em até 7 dias úteis mediante apresentação deste comprovante.',
+};

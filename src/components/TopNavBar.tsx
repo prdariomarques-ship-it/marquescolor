@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { ActiveScreen, RoleId } from '../types';
+import { useTheme } from '../context/ThemeContext';
+import { useNotification } from '../context/NotificationContext';
+import { NotificationPopover } from './NotificationPopover';
 
 interface TopNavBarProps {
   activeScreen: ActiveScreen;
@@ -13,6 +16,7 @@ interface TopNavBarProps {
   onOpenHelp: () => void;
   onOpenCloseCashier: () => void;
   onOpenTintometria: () => void;
+  onOpenImportModal?: () => void;
   onNavigate: (s: ActiveScreen) => void;
 }
 
@@ -24,11 +28,14 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
   onOpenHelp,
   onOpenCloseCashier,
   onOpenTintometria,
+  onOpenImportModal,
   onNavigate,
 }) => {
   const [timeStr, setTimeStr] = useState('14:32:08');
   const [isSyncing, setIsSyncing] = useState(false);
-  const [notificationCount, setNotificationCount] = useState(3);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const { unreadCount, allAlerts } = useNotification();
+  const { theme, toggleTheme, isDark } = useTheme();
 
   useEffect(() => {
     const updateTime = () => {
@@ -73,6 +80,18 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
           title: 'Módulo Financeiro & Fluxo de Caixa',
           sub: 'DRE consolidado, demonstrativo contábil e conciliação de fornecedores',
           tag: 'Exercício 2023'
+        };
+      case 'vendas':
+        return {
+          title: 'Histórico de Vendas & Cupons Não Fiscais',
+          sub: 'Consulta detalhada de comprovantes de venda emitidos no balcão',
+          tag: 'Cupom Não Fiscal'
+        };
+      case 'estoque':
+        return {
+          title: 'Gestão de Estoque & Reposição',
+          sub: 'Controle de saldos críticos, balanço de inventário e pedidos preditivos',
+          tag: 'Inventário Físico'
         };
       case 'auth':
         return {
@@ -165,6 +184,30 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
 
           {/* Icon Actions Cluster */}
           <div className="flex items-center gap-1 border-l border-[#c4c6ce]/40 pl-3">
+            {/* Ambiente Claro / Escuro Switcher */}
+            <button
+              onClick={toggleTheme}
+              className="px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 text-xs font-semibold text-[#44474d] hover:text-[#001229] hover:bg-[#f0f3ff] transition-all cursor-pointer border border-[#c4c6ce]/40 shadow-2xs"
+              title={isDark ? "Alternar para Modo Claro (Diurno)" : "Alternar para Modo Escuro (Noturno)"}
+            >
+              <span className={`material-symbols-outlined text-base ${isDark ? 'text-amber-400' : 'text-indigo-600'}`}>
+                {isDark ? 'light_mode' : 'dark_mode'}
+              </span>
+              <span className="hidden sm:inline font-mono text-[11px]">
+                {isDark ? 'Claro' : 'Escuro'}
+              </span>
+            </button>
+
+            {onOpenImportModal && (
+              <button
+                onClick={onOpenImportModal}
+                className="w-9 h-9 flex items-center justify-center rounded-lg text-[#00687a] hover:text-[#004e5c] hover:bg-[#e7eeff] transition-all cursor-pointer"
+                title="Importar Planilha / PDF / CSV / MD (Alimentar DRE e Sistemas)"
+              >
+                <span className="material-symbols-outlined text-xl">upload_file</span>
+              </button>
+            )}
+
             <button
               onClick={handleSync}
               className={`w-9 h-9 flex items-center justify-center rounded-lg text-[#44474d] hover:text-[#001229] hover:bg-[#f0f3ff] transition-all cursor-pointer ${isSyncing ? 'animate-spin text-[#00687a]' : ''}`}
@@ -181,19 +224,30 @@ export const TopNavBar: React.FC<TopNavBarProps> = ({
               <span className="material-symbols-outlined text-xl">print</span>
             </button>
 
-            <button
-              onClick={() => {
-                alert(`Notificações do Sistema:\n1. 8 itens atingiram estoque mínimo de base.\n2. Título de Suvinil vence hoje (R$ 42.800,00).\n3. Tintométrica calibrada com sucesso.`);
-                setNotificationCount(0);
-              }}
-              className="relative w-9 h-9 flex items-center justify-center rounded-lg text-[#44474d] hover:text-[#001229] hover:bg-[#f0f3ff] transition-colors cursor-pointer"
-              title="Notificações"
-            >
-              <span className="material-symbols-outlined text-xl">notifications</span>
-              {notificationCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-[#ba1a1a] rounded-full ring-2 ring-white"></span>
-              )}
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setIsNotificationsOpen(prev => !prev)}
+                className={`relative w-9 h-9 flex items-center justify-center rounded-lg transition-colors cursor-pointer ${
+                  isNotificationsOpen
+                    ? 'bg-[#001229] text-white'
+                    : 'text-[#44474d] hover:text-[#001229] hover:bg-[#f0f3ff]'
+                }`}
+                title="Alertas & Notificações de Estoque"
+              >
+                <span className="material-symbols-outlined text-xl">notifications</span>
+                {allAlerts.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 bg-[#ba1a1a] text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-white animate-pulse">
+                    {allAlerts.length}
+                  </span>
+                )}
+              </button>
+
+              <NotificationPopover
+                isOpen={isNotificationsOpen}
+                onClose={() => setIsNotificationsOpen(false)}
+                onNavigate={onNavigate}
+              />
+            </div>
 
             <button
               onClick={onOpenTintometria}

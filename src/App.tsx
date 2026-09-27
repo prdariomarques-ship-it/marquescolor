@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { ActiveScreen, RoleId, CartItem, ProductItem, Client, CompletedSaleData, SuspendedOrder } from './types';
-import { INITIAL_PRODUCTS, INITIAL_CLIENTS, RECENT_SALES, SCHEDULE_ITEMS, RBAC_ROLES } from './data/mockData';
+import { ActiveScreen, RoleId, CartItem, ProductItem, Client, CompletedSaleData, SuspendedOrder, DREData, ScheduleItem } from './types';
+import { INITIAL_PRODUCTS, INITIAL_CLIENTS, RECENT_SALES, SCHEDULE_ITEMS, RBAC_ROLES, INITIAL_COMPLETED_SALES, INITIAL_DRE_DATA } from './data/mockData';
 import { SideNavBar } from './components/SideNavBar';
 import { TopNavBar } from './components/TopNavBar';
 import { DashboardView } from './components/DashboardView';
@@ -14,10 +14,16 @@ import { ClientesView } from './components/ClientesView';
 import { FinanceiroView } from './components/FinanceiroView';
 import { AuthView } from './components/AuthView';
 import { EstoqueView } from './components/EstoqueView';
+import { HistoricoVendasView } from './components/HistoricoVendasView';
 import { TintometriaModal } from './components/TintometriaModal';
 import { HelpModal, CloseCashierModal, FinalizeSaleModal } from './components/Modals';
+import { ImportDataModal } from './components/ImportDataModal';
+import { StockToastContainer } from './components/StockToastContainer';
+import { ThemeProvider } from './context/ThemeContext';
+import { useNotification } from './context/NotificationContext';
 
 export default function App() {
+  const { triggerStockAlert } = useNotification();
   const [activeScreen, setActiveScreen] = useState<ActiveScreen>('dashboard');
   const [products, setProducts] = useState<ProductItem[]>(INITIAL_PRODUCTS);
   const [clients, setClients] = useState<Client[]>(INITIAL_CLIENTS);
@@ -49,6 +55,22 @@ export default function App() {
     } catch {}
   }, [savedOrders]);
 
+  // Completed Sales History state (with localStorage persistence)
+  const [completedSales, setCompletedSales] = useState<CompletedSaleData[]>(() => {
+    try {
+      const stored = localStorage.getItem('marquescolor_completed_sales');
+      return stored ? JSON.parse(stored) : INITIAL_COMPLETED_SALES;
+    } catch {
+      return INITIAL_COMPLETED_SALES;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('marquescolor_completed_sales', JSON.stringify(completedSales));
+    } catch {}
+  }, [completedSales]);
+
   // Current Operator
   const [currentUser, setCurrentUser] = useState({
     name: 'Marcos Silva',
@@ -63,7 +85,32 @@ export default function App() {
   const [isHelpOpen, setIsHelpOpen] = useState(false);
   const [isCloseCashierOpen, setIsCloseCashierOpen] = useState(false);
   const [isTintometriaOpen, setIsTintometriaOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [finalizeSaleData, setFinalizeSaleData] = useState<CompletedSaleData | null>(null);
+
+  // DRE & Contábil State (persisted in localStorage)
+  const [dreData, setDreData] = useState<DREData>(() => {
+    try {
+      const saved = localStorage.getItem('marquescolor_dre_data');
+      return saved ? JSON.parse(saved) : INITIAL_DRE_DATA;
+    } catch {
+      return INITIAL_DRE_DATA;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('marquescolor_dre_data', JSON.stringify(dreData));
+    } catch {}
+  }, [dreData]);
+
+  const handleUpdateDRE = (newDre: DREData) => {
+    setDreData(newDre);
+  };
+
+  const handleAddScheduleItems = (newItems: ScheduleItem[]) => {
+    setScheduleItems(prev => [...newItems, ...prev]);
+  };
 
   // Keyboard Accelerators (F1..F12)
   useEffect(() => {
@@ -172,6 +219,7 @@ export default function App() {
     };
 
     setFinalizeSaleData(fullSaleData);
+    setCompletedSales(prev => [fullSaleData, ...prev]);
 
     // Deduct stock for sold items
     const soldItems = summary.items || cart;
@@ -181,10 +229,29 @@ export default function App() {
         if (sold) {
           const newStock = Math.max(0, p.stock - sold.quantity);
           const min = p.minStock ?? (p.isCritical ? 15 : 12);
+          const isCrit = newStock <= min;
+          
+          if (isCrit) {
+            triggerStockAlert({
+              productId: p.id,
+              productName: p.name,
+              sku: p.sku,
+              brand: p.brand,
+              swatchHex: p.swatchHex,
+              swatchDot: p.swatchDot,
+              currentStock: newStock,
+              minStock: min,
+              stockUnit: p.stockUnit || 'latas',
+              type: newStock === 0 ? 'out_of_stock' : 'critical',
+              title: newStock === 0 ? 'Ruptura Total de Estoque!' : 'Alerta: Estoque Crítico Atingido!',
+              message: `Após a venda ${orderNum}, o saldo de ${p.name} baixou para ${newStock} ${p.stockUnit || 'latas'}.`,
+            });
+          }
+
           return {
             ...p,
             stock: newStock,
-            isCritical: newStock <= min,
+            isCritical: isCrit,
             volumeToday: p.volumeToday + sold.quantity,
             salesTotal: p.salesTotal + p.price * sold.quantity,
           };
@@ -214,10 +281,27 @@ export default function App() {
       prev.map(p => {
         if (p.id === productId) {
           const min = p.minStock ?? 12;
+          const isCrit = newStock <= min;
+          if (isCrit) {
+            triggerStockAlert({
+              productId: p.id,
+              productName: p.name,
+              sku: p.sku,
+              brand: p.brand,
+              swatchHex: p.swatchHex,
+              swatchDot: p.swatchDot,
+              currentStock: newStock,
+              minStock: min,
+              stockUnit: p.stockUnit || 'latas',
+              type: newStock === 0 ? 'out_of_stock' : 'critical',
+              title: newStock === 0 ? 'Ruptura Total de Estoque!' : 'Estoque Crítico Atingido!',
+              message: `Ajuste manual: estoque de ${p.name} agora é ${newStock} ${p.stockUnit || 'latas'}.`,
+            });
+          }
           return {
             ...p,
             stock: newStock,
-            isCritical: newStock <= min,
+            isCritical: isCrit,
           };
         }
         return p;
@@ -232,10 +316,27 @@ export default function App() {
         if (map.has(p.id)) {
           const newStock = map.get(p.id)!;
           const min = p.minStock ?? 12;
+          const isCrit = newStock <= min;
+          if (isCrit) {
+            triggerStockAlert({
+              productId: p.id,
+              productName: p.name,
+              sku: p.sku,
+              brand: p.brand,
+              swatchHex: p.swatchHex,
+              swatchDot: p.swatchDot,
+              currentStock: newStock,
+              minStock: min,
+              stockUnit: p.stockUnit || 'latas',
+              type: newStock === 0 ? 'out_of_stock' : 'critical',
+              title: newStock === 0 ? 'Ruptura Total de Estoque!' : 'Estoque Crítico Atingido!',
+              message: `Atualização em lote: estoque de ${p.name} agora é ${newStock} ${p.stockUnit || 'latas'}.`,
+            });
+          }
           return {
             ...p,
             stock: newStock,
-            isCritical: newStock <= min,
+            isCritical: isCrit,
           };
         }
         return p;
@@ -259,7 +360,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f9f9ff] text-[#0e1c2f] flex flex-col font-sans">
+    <ThemeProvider>
+      <div className="min-h-screen bg-[#f9f9ff] text-[#0e1c2f] flex flex-col font-sans transition-colors duration-200">
       {/* SIDEBAR NAVIGATION (Hidden when in standalone auth screen if desired, or always accessible via switch) */}
       <SideNavBar
         activeScreen={activeScreen}
@@ -269,6 +371,7 @@ export default function App() {
         tintometricConnected={true}
         onOpenTintometria={() => setIsTintometriaOpen(true)}
         criticalCount={products.filter(p => (p.stock <= (p.minStock ?? 12)) || p.isCritical).length}
+        salesCount={completedSales.length}
       />
 
       {/* TOP HEADER BAR */}
@@ -280,6 +383,7 @@ export default function App() {
         onOpenHelp={() => setIsHelpOpen(true)}
         onOpenCloseCashier={() => setIsCloseCashierOpen(true)}
         onOpenTintometria={() => setIsTintometriaOpen(true)}
+        onOpenImportModal={() => setIsImportModalOpen(true)}
         onNavigate={(screen) => setActiveScreen(screen)}
       />
 
@@ -289,6 +393,7 @@ export default function App() {
           <DashboardView
             products={products}
             recentSales={recentSales}
+            completedSales={completedSales}
             onSelectProductForSale={(prod) => {
               handleAddToCart(prod);
               setActiveScreen('pdv');
@@ -296,6 +401,7 @@ export default function App() {
             onNavigateToPDV={() => setActiveScreen('pdv')}
             onNavigateToFinanceiro={() => setActiveScreen('relatorios')}
             onNavigateToEstoque={() => setActiveScreen('estoque')}
+            onNavigateToVendas={() => setActiveScreen('vendas')}
           />
         )}
 
@@ -309,6 +415,17 @@ export default function App() {
               setActiveScreen('pdv');
             }}
             currentUser={currentUser}
+          />
+        )}
+
+        {activeScreen === 'vendas' && (
+          <HistoricoVendasView
+            sales={completedSales}
+            onNavigateToPDV={() => setActiveScreen('pdv')}
+            onNavigateToPDVWithItems={(items) => {
+              setCart(items);
+              setActiveScreen('pdv');
+            }}
           />
         )}
 
@@ -368,6 +485,9 @@ export default function App() {
         {activeScreen === 'relatorios' && (
           <FinanceiroView
             scheduleItems={scheduleItems}
+            dreData={dreData}
+            onUpdateDRE={handleUpdateDRE}
+            onOpenImportModal={() => setIsImportModalOpen(true)}
             onOpenNewExpenseModal={() => {
               const desc = prompt('Descrição do Pagamento / Fornecedor:');
               const val = prompt('Valor (R$):');
@@ -409,6 +529,17 @@ export default function App() {
         onClose={() => setIsTintometriaOpen(false)}
         onAddCustomFormulaToCart={handleAddCustomFormulaToCart}
       />
+      <ImportDataModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        currentDre={dreData}
+        onUpdateDRE={handleUpdateDRE}
+        onAddScheduleItems={handleAddScheduleItems}
+      />
+
+      {/* FLOATING STOCK NOTIFICATIONS (TOASTS) */}
+      <StockToastContainer onNavigate={(s) => setActiveScreen(s)} />
     </div>
+  </ThemeProvider>
   );
 }

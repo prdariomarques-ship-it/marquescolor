@@ -1,5 +1,6 @@
 import React from 'react';
 import { ActiveScreen, RoleId } from '../types';
+import { useTheme } from '../context/ThemeContext';
 
 interface SideNavBarProps {
   activeScreen: ActiveScreen;
@@ -13,6 +14,7 @@ interface SideNavBarProps {
   tintometricConnected: boolean;
   onOpenTintometria: () => void;
   criticalCount?: number;
+  salesCount?: number;
 }
 
 export const SideNavBar: React.FC<SideNavBarProps> = ({
@@ -23,7 +25,10 @@ export const SideNavBar: React.FC<SideNavBarProps> = ({
   tintometricConnected,
   onOpenTintometria,
   criticalCount,
+  salesCount,
 }) => {
+  const { theme, toggleTheme, isDark } = useTheme();
+
   return (
     <aside className="fixed top-0 left-0 h-screen w-64 flex flex-col z-30 bg-[#0f2744] text-white border-r border-[#c4c6ce]/30 shadow-md select-none">
       <div className="h-full flex flex-col justify-between p-4 overflow-y-auto">
@@ -180,11 +185,27 @@ export const SideNavBar: React.FC<SideNavBarProps> = ({
 
             {/* 8. Vendas */}
             <button
-              onClick={() => onNavigate('dashboard')}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left text-[#798fb1] hover:text-white hover:bg-white/5 font-medium transition-colors"
+              onClick={() => onNavigate('vendas')}
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-all ${
+                activeScreen === 'vendas'
+                  ? 'bg-white/10 text-white font-bold border-l-4 border-[#57dffe] shadow-xs'
+                  : 'text-[#798fb1] hover:text-white hover:bg-white/5 font-medium'
+              }`}
             >
-              <span className="material-symbols-outlined text-xl">receipt_long</span>
-              <span className="text-[13px]">Histórico Vendas</span>
+              <span className="flex items-center gap-3">
+                <span
+                  className={`material-symbols-outlined text-xl ${activeScreen === 'vendas' ? 'text-[#57dffe]' : ''}`}
+                  style={{ fontVariationSettings: activeScreen === 'vendas' ? "'FILL' 1" : "'FILL' 0" }}
+                >
+                  receipt_long
+                </span>
+                <span className="text-[13px]">Histórico Vendas</span>
+              </span>
+              {salesCount !== undefined && salesCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-[#00687a] text-white">
+                  {salesCount}
+                </span>
+              )}
             </button>
 
             {/* 9. Relatórios / Financeiro */}
@@ -225,6 +246,44 @@ export const SideNavBar: React.FC<SideNavBarProps> = ({
 
         {/* Footer Hardware & Operator Telemetry */}
         <div className="pt-4 border-t border-[#c4c6ce]/20 space-y-2.5">
+          {/* Ambiente Claro / Escuro Switcher in SideNav */}
+          <div className="flex items-center justify-between p-1.5 bg-black/20 rounded-lg border border-white/10 text-xs">
+            <span className="text-[11px] font-semibold text-[#798fb1] pl-1.5 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-sm">
+                {isDark ? 'dark_mode' : 'light_mode'}
+              </span>
+              Ambiente
+            </span>
+            <div className="inline-flex p-0.5 rounded-md bg-white/5 border border-white/10">
+              <button
+                type="button"
+                onClick={() => !isDark || toggleTheme()}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                  !isDark
+                    ? 'bg-amber-400 text-[#001229] shadow-xs'
+                    : 'text-[#798fb1] hover:text-white'
+                }`}
+                title="Ativar Ambiente Claro"
+              >
+                <span className="material-symbols-outlined text-xs">light_mode</span>
+                <span>Claro</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => isDark || toggleTheme()}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] font-bold transition-all cursor-pointer ${
+                  isDark
+                    ? 'bg-[#57dffe] text-[#001229] shadow-xs'
+                    : 'text-[#798fb1] hover:text-white'
+                }`}
+                title="Ativar Ambiente Escuro"
+              >
+                <span className="material-symbols-outlined text-xs">dark_mode</span>
+                <span>Escuro</span>
+              </button>
+            </div>
+          </div>
+
           {/* Hardware status badge */}
           <button 
             onClick={onOpenTintometria}

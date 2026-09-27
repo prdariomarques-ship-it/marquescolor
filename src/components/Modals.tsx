@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { jsPDF } from 'jspdf';
 import { CompletedSaleData } from '../types';
+import { STORE_CONFIG } from '../data/storeConfig';
 
 interface HelpModalProps {
   isOpen: boolean;
@@ -21,7 +22,7 @@ export const HelpModal: React.FC<HelpModalProps> = ({ isOpen, onClose }) => {
     { key: 'F8', desc: 'Excluir Item Selecionado / Cancelar Venda' },
     { key: 'F9', desc: 'Dosagem Tintométrica de Pigmentos' },
     { key: 'F10', desc: 'Fechamento de Caixa / Sangria de Turno' },
-    { key: 'F12', desc: 'Finalizar Venda e Emitir Cupom Fiscal NFC-e' },
+    { key: 'F12', desc: 'Finalizar Venda e Emitir Cupom Não Fiscal' },
   ];
 
   return (
@@ -184,6 +185,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
     setTimeout(() => setFeedbackMessage(null), 3500);
   };
 
+  const orderNum = saleData.orderNumber || 'PED-48920';
   const nfceNum = saleData.nfceNumber || '000.004.892';
   const serie = saleData.series || '001';
   const accessKey = saleData.accessKey || '4126 0918 2918 0200 0190 6500 1000 4892 1098 2177 1256';
@@ -240,38 +242,38 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
       // Header Empresa
       doc.setFont('courier', 'bold');
       doc.setFontSize(9.5);
-      doc.text('MARQUESCOLOR TINTAS', center, y, { align: 'center' });
+      doc.text(STORE_CONFIG.name, center, y, { align: 'center' });
       y += 4;
       doc.setFontSize(7.5);
       doc.setFont('courier', 'normal');
-      doc.text('E REVESTIMENTOS LTDA', center, y, { align: 'center' });
+      doc.text(STORE_CONFIG.address, center, y, { align: 'center' });
       y += 3.5;
       doc.setFontSize(6);
-      doc.text('CNPJ: 18.291.802/0001-90  IE: 114.908.231.110', center, y, { align: 'center' });
+      doc.text(`${STORE_CONFIG.neighborhood} - ${STORE_CONFIG.city} - ${STORE_CONFIG.state}`, center, y, { align: 'center' });
       y += 3;
-      doc.text('Av. das Tintas, 1042 - Matriz Centro Cívico', center, y, { align: 'center' });
-      y += 3;
-      doc.text('Curitiba - PR • Fone: (41) 3344-9000', center, y, { align: 'center' });
+      doc.text(`CNPJ: ${STORE_CONFIG.cnpj} • Fone: ${STORE_CONFIG.phone}`, center, y, { align: 'center' });
       y += 3;
 
       // Divider
       doc.text('------------------------------------------------', center, y, { align: 'center' });
       y += 3.5;
 
-      // NFC-e Header
+      // Cupom Não Fiscal Header
       doc.setFont('courier', 'bold');
-      doc.setFontSize(7);
-      doc.text('DANFE NFC-e - Documento Auxiliar', center, y, { align: 'center' });
+      doc.setFontSize(8);
+      doc.text('*** CUPOM NÃO FISCAL ***', center, y, { align: 'center' });
       y += 3;
-      doc.text('Nota Fiscal de Consumidor Eletrônica', center, y, { align: 'center' });
-      y += 3.5;
-      doc.setFont('courier', 'normal');
       doc.setFontSize(6);
-      doc.text(`NFC-e nº: ${nfceNum}  Série: ${serie}`, margin, y);
+      doc.setFont('courier', 'normal');
+      doc.text('NÃO É DOCUMENTO FISCAL', center, y, { align: 'center' });
       y += 3;
-      doc.text(`Emissão: ${timestamp}`, margin, y);
+      doc.text('COMPROVANTE DE VENDA A CONSUMIDOR', center, y, { align: 'center' });
+      y += 3.5;
+      doc.text(`Pedido/Venda nº: ${orderNum}`, margin, y);
       y += 3;
-      doc.text(`Protocolo Autorização: ${protocol}`, margin, y);
+      doc.text(`Data/Hora: ${timestamp}`, margin, y);
+      y += 3;
+      doc.text(`Operador: ${operator}`, margin, y);
       y += 3;
 
       // Divider
@@ -335,7 +337,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
         doc.text(`Subtotal dos Produtos:`, margin, y);
         doc.text(`R$ ${subtotal.toFixed(2)}`, right, y, { align: 'right' });
         y += 3;
-        doc.text(`Desconto Convênio/Cupom:`, margin, y);
+        doc.text(`Desconto Concedido:`, margin, y);
         doc.text(`- R$ ${discount.toFixed(2)}`, right, y, { align: 'right' });
         y += 3;
       }
@@ -370,36 +372,19 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
       doc.text('------------------------------------------------', center, y, { align: 'center' });
       y += 3.5;
 
-      // Taxes Law 12.741/2012
-      const aproxTaxes = (total * 0.1845).toFixed(2);
-      doc.text(`Trib. Incidentes (Lei 12.741): R$ ${aproxTaxes} (18.45%)`, center, y, { align: 'center' });
+      // Non-fiscal policy and footer
+      doc.text(STORE_CONFIG.policyNotice, center, y, { align: 'center' });
       y += 3;
-      doc.text(`Federal R$ ${(total * 0.042).toFixed(2)} • Estadual R$ ${(total * 0.1425).toFixed(2)}`, center, y, { align: 'center' });
-      y += 3.5;
-
-      // SEFAZ Access Key
-      doc.text('Consulte pela Chave de Acesso em:', center, y, { align: 'center' });
-      y += 2.8;
-      doc.text('www.fazenda.pr.gov.br/nfce/consulta', center, y, { align: 'center' });
-      y += 3.5;
+      doc.text(`Código de Controle: ${orderNum}-${Date.now().toString().slice(-4)}`, center, y, { align: 'center' });
+      y += 3;
       doc.setFont('courier', 'bold');
-      doc.setFontSize(5.5);
-      doc.text(`CHAVE DE ACESSO:`, center, y, { align: 'center' });
-      y += 2.5;
-      doc.text(accessKey, center, y, { align: 'center' });
-      y += 4;
-
-      // Simulated Barcode / QR Code placeholder
+      doc.text('MARQUESCOLOR TINTAS', center, y, { align: 'center' });
+      y += 3;
       doc.setFont('courier', 'normal');
-      doc.setFontSize(6);
-      doc.text('[QR CODE SEFAZ AUTORIZADO]', center, y, { align: 'center' });
-      y += 3;
-      doc.text(`Operador: ${operator}`, center, y, { align: 'center' });
-      y += 3;
       doc.text('Obrigado pela preferência! Volte Sempre.', center, y, { align: 'center' });
 
       // Save PDF file
-      const fileName = `Cupom_NFCe_${nfceNum.replace(/\./g, '')}_${Date.now().toString().slice(-4)}.pdf`;
+      const fileName = `Cupom_Nao_Fiscal_${orderNum}_${Date.now().toString().slice(-4)}.pdf`;
       doc.save(fileName);
       showToast(`✓ PDF "${fileName}" gerado e baixado com sucesso!`, 'success');
     } catch (err) {
@@ -434,7 +419,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
         <html>
         <head>
           <meta charset="utf-8">
-          <title>Cupom Fiscal NFC-e nº ${nfceNum}</title>
+          <title>Cupom Não Fiscal - Pedido ${orderNum}</title>
           <style>
             @page {
               size: 80mm auto;
@@ -473,47 +458,28 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
               justify-content: space-between;
               margin: 4px 0;
             }
-            .qr-code-box {
-              width: 100px;
-              height: 100px;
-              margin: 6px auto;
-              border: 1px solid #000;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              font-size: 9px;
-            }
-            .barcode-line {
-              letter-spacing: 3px;
-              font-family: monospace;
-              font-size: 14px;
-              text-align: center;
-              margin: 4px 0;
-            }
           </style>
         </head>
         <body>
-          <div class="center bold" style="font-size: 13px;">MARQUESCOLOR TINTAS</div>
-          <div class="center" style="font-size: 10px;">E REVESTIMENTOS LTDA</div>
-          <div class="center" style="font-size: 9px;">CNPJ: 18.291.802/0001-90 • IE: 114.908.231.110</div>
-          <div class="center" style="font-size: 9px;">Av. das Tintas, 1042 - Centro Cívico - Curitiba/PR</div>
-          <div class="center" style="font-size: 9px;">Fone: (41) 3344-9000</div>
+          <div class="center bold" style="font-size: 13px;">${STORE_CONFIG.name}</div>
+          <div class="center" style="font-size: 9.5px;">CNPJ: ${STORE_CONFIG.cnpj}</div>
+          <div class="center" style="font-size: 9px;">${STORE_CONFIG.address}</div>
+          <div class="center" style="font-size: 9px;">${STORE_CONFIG.neighborhood} - ${STORE_CONFIG.city}/${STORE_CONFIG.state}</div>
+          <div class="center" style="font-size: 9px;">Telefone: ${STORE_CONFIG.phone}</div>
 
           <div class="divider"></div>
 
-          <div class="center bold" style="font-size: 11px;">DANFE NFC-e - Documento Auxiliar</div>
-          <div class="center" style="font-size: 10px;">Nota Fiscal de Consumidor Eletrônica</div>
-          <div class="center" style="font-size: 9px;">Não permite aproveitamento de crédito de ICMS</div>
+          <div class="center bold" style="font-size: 11px;">*** CUPOM NÃO FISCAL ***</div>
+          <div class="center" style="font-size: 9px;">NÃO É DOCUMENTO FISCAL</div>
+          <div class="center" style="font-size: 8.5px;">COMPROVANTE DE VENDA A CONSUMIDOR</div>
 
           <div class="divider"></div>
 
           <div class="flex-between" style="font-size: 10px;">
-            <span>NFC-e nº: ${nfceNum}</span>
-            <span>Série: ${serie}</span>
+            <span>Pedido: ${orderNum}</span>
+            <span>Data: ${timestamp}</span>
           </div>
-          <div style="font-size: 10px;">Emissão: ${timestamp}</div>
-          <div style="font-size: 9px; color: #333;">Protocolo: ${protocol}</div>
+          <div style="font-size: 9.5px; color: #333;">Operador: ${operator}</div>
 
           <div class="divider"></div>
 
@@ -569,30 +535,16 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
           <div class="divider"></div>
 
           <div class="center" style="font-size: 8.5px;">
-            Tributos Totais Incidentes (Lei Federal 12.741/2012): R$ ${(total * 0.1845).toFixed(2)} (18.45%)
+            ${STORE_CONFIG.policyNotice}
           </div>
 
           <div class="divider"></div>
 
-          <div class="center" style="font-size: 9px;">Consulte pela Chave de Acesso em:</div>
-          <div class="center bold" style="font-size: 8.5px;">www.fazenda.pr.gov.br/nfce/consulta</div>
-          <div class="center" style="font-size: 8px; margin-top: 3px; word-break: break-all;">
-            CHAVE DE ACESSO:
-            <br>
-            <strong>${accessKey}</strong>
+          <div class="center bold" style="font-size: 9.5px; margin-top: 4px;">
+            ${STORE_CONFIG.name}
           </div>
-
-          <div class="qr-code-box">
-            <div style="font-size: 24px;">▣</div>
-            <div>QR-CODE SEFAZ</div>
-            <div style="font-size: 7px;">CONSULTA VIA APP</div>
-          </div>
-
-          <div class="center" style="font-size: 8.5px; margin-top: 4px;">
-            Operador: ${operator}
-          </div>
-          <div class="center bold" style="font-size: 9px; margin-top: 4px;">
-            MARQUESCOLOR • SUA OBRA EM BOAS MÃOS
+          <div class="center" style="font-size: 9px;">
+            Obrigado pela preferência! Volte Sempre.
           </div>
           <div class="center" style="font-size: 8px; margin-top: 8px;">
             ====================================
@@ -624,7 +576,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
         setTimeout(() => {
           iframe?.contentWindow?.focus();
           iframe?.contentWindow?.print();
-          showToast('✓ Comando enviado para a impressora térmica / driver PDF!', 'success');
+          showToast('✓ Cupom não fiscal enviado para impressão!', 'success');
         }, 300);
       }
     } catch (err) {
@@ -638,9 +590,13 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
   // =========================================================================
   const handleCopyReceiptText = () => {
     const lines = [
-      `🎨 *MARQUESCOLOR TINTAS & REVESTIMENTOS*`,
-      `CNPJ: 18.291.802/0001-90 • Curitiba/PR`,
-      `*CUPOM FISCAL ELETRÔNICO NFC-e nº ${nfceNum}*`,
+      `🎨 *${STORE_CONFIG.name}*`,
+      `CNPJ: ${STORE_CONFIG.cnpj}`,
+      `${STORE_CONFIG.address} - ${STORE_CONFIG.neighborhood}`,
+      `${STORE_CONFIG.city}/${STORE_CONFIG.state} • Tel: ${STORE_CONFIG.phone}`,
+      `----------------------------------------`,
+      `*CUPOM NÃO FISCAL - COMPROVANTE DE VENDA*`,
+      `Pedido nº: ${orderNum}`,
       `Data: ${timestamp}`,
       `----------------------------------------`,
       `*Cliente:* ${saleData.client.name}`,
@@ -654,9 +610,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
       `Forma de Pagamento: ${saleData.paymentMethod}`,
       `Troco: R$ ${saleData.changeAmount.toFixed(2)}`,
       `----------------------------------------`,
-      `*Chave SEFAZ:*`,
-      `${accessKey}`,
-      `Protocolo: ${protocol}`,
+      `${STORE_CONFIG.policyNotice}`,
       `Agradecemos a sua preferência!`
     ].filter(Boolean).join('\n');
 
@@ -678,11 +632,11 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
               <h3 className="text-sm font-bold flex items-center gap-2">
                 <span>Venda Finalizada com Sucesso!</span>
                 <span className="bg-emerald-800 text-[10px] px-2 py-0.5 rounded-full font-mono font-medium">
-                  NFC-e Autorizada
+                  Cupom Não Fiscal
                 </span>
               </h3>
               <p className="text-[11px] text-emerald-100">
-                Protocolo SEFAZ {protocol} • {timestamp}
+                Comprovante de Venda • Pedido {orderNum} • {timestamp}
               </p>
             </div>
           </div>
@@ -744,7 +698,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
               }`}
             >
               <span className="material-symbols-outlined text-sm">description</span>
-              <span>Resumo Fiscal</span>
+              <span>Resumo da Venda</span>
             </button>
           </div>
 
@@ -763,27 +717,24 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
 
               {/* Header Empresa */}
               <div className="text-center pb-2 border-b border-dashed border-[#888]">
-                <div className="font-extrabold text-xs text-[#001229] tracking-tight">MARQUESCOLOR TINTAS</div>
-                <div className="text-[10px] text-[#44474d]">E REVESTIMENTOS LTDA</div>
-                <div className="text-[9px] text-[#74777e] mt-0.5">CNPJ: 18.291.802/0001-90 • IE: 114.908.231.110</div>
-                <div className="text-[9px] text-[#74777e]">Av. das Tintas, 1042 - Matriz Centro Cívico</div>
-                <div className="text-[9px] text-[#74777e]">Curitiba/PR • Fone: (41) 3344-9000</div>
+                <div className="font-extrabold text-xs text-[#001229] tracking-tight">{STORE_CONFIG.name}</div>
+                <div className="text-[10px] text-[#44474d] font-bold">CNPJ: {STORE_CONFIG.cnpj}</div>
+                <div className="text-[9px] text-[#74777e] mt-0.5">{STORE_CONFIG.address}</div>
+                <div className="text-[9px] text-[#74777e]">{STORE_CONFIG.neighborhood} - {STORE_CONFIG.city}/{STORE_CONFIG.state}</div>
+                <div className="text-[9px] text-[#74777e]">Telefone: {STORE_CONFIG.phone}</div>
               </div>
 
-              {/* NFC-e Document Subheader */}
+              {/* Cupom Não Fiscal Subheader */}
               <div className="py-2 border-b border-dashed border-[#888] text-center">
-                <div className="font-bold text-[10.5px]">DANFE NFC-e - Documento Auxiliar</div>
-                <div className="text-[9.5px]">Nota Fiscal de Consumidor Eletrônica</div>
-                <div className="text-[8.5px] text-[#74777e]">Não permite aproveitamento de crédito de ICMS</div>
+                <div className="font-bold text-[11px]">*** CUPOM NÃO FISCAL ***</div>
+                <div className="text-[9.5px]">NÃO É DOCUMENTO FISCAL</div>
+                <div className="text-[8.5px] text-[#74777e]">COMPROVANTE DE VENDA A CONSUMIDOR</div>
                 <div className="flex justify-between items-center text-[10px] mt-1 pt-1 border-t border-dotted border-[#aaa]">
-                  <span>NFC-e: {nfceNum}</span>
-                  <span>SÉRIE: {serie}</span>
+                  <span>PEDIDO: {orderNum}</span>
+                  <span>OPERADOR: {operator.split(' ')[0]}</span>
                 </div>
                 <div className="text-left text-[9.5px] text-[#44474d]">
                   Emissão: {timestamp}
-                </div>
-                <div className="text-left text-[9px] text-[#74777e]">
-                  Protocolo: {protocol}
                 </div>
               </div>
 
@@ -865,31 +816,20 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
                 )}
               </div>
 
-              {/* Tax Details */}
-              <div className="py-1.5 border-b border-dashed border-[#888] text-center text-[8.5px] text-[#74777e]">
-                <div>Tributos Incidentes (Lei 12.741/2012): R$ {(total * 0.1845).toFixed(2)} (18.45%)</div>
-                <div>Federal R$ {(total * 0.042).toFixed(2)} • Estadual R$ {(total * 0.1425).toFixed(2)}</div>
+              {/* Non-Fiscal Policy & Footer */}
+              <div className="py-2 border-b border-dashed border-[#888] text-center text-[8.5px] text-[#74777e]">
+                {STORE_CONFIG.policyNotice}
               </div>
 
-              {/* SEFAZ Key & QR Code */}
-              <div className="pt-2 text-center flex flex-col items-center justify-center space-y-1.5">
-                <div className="text-[9px] text-[#44474d]">Consulte pela Chave de Acesso em:</div>
-                <div className="text-[8.5px] font-bold text-[#001229]">www.fazenda.pr.gov.br/nfce/consulta</div>
-                <div className="p-1 bg-white border border-[#c4c6ce] rounded text-[8px] text-[#44474d] tracking-tight word-break select-all">
-                  {accessKey}
-                </div>
-
-                {/* Simulated QR Code Box */}
-                <div className="w-24 h-24 bg-white border-2 border-[#001229] p-1 flex flex-col items-center justify-center rounded shadow-2xs">
-                  <span className="material-symbols-outlined text-5xl text-[#001229]">qr_code_2</span>
-                  <span className="text-[7.5px] font-bold uppercase tracking-widest text-[#001229]">SEFAZ NFC-e</span>
-                </div>
-
-                <div className="text-[9px] text-[#74777e] pt-1">
+              <div className="pt-2 text-center flex flex-col items-center justify-center space-y-1">
+                <div className="text-[9px] text-[#74777e]">
                   Operador: {operator}
                 </div>
                 <div className="text-[8.5px] font-bold text-[#001229]">
-                  MARQUESCOLOR TINTAS • VOLTE SEMPRE!
+                  {STORE_CONFIG.name} • VOLTE SEMPRE!
+                </div>
+                <div className="text-[8px] text-[#74777e]">
+                  Controle Interno: {orderNum}
                 </div>
               </div>
 
@@ -897,13 +837,13 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
               <div className="absolute -bottom-1.5 left-0 right-0 h-1.5 bg-repeat-x bg-[radial-gradient(circle,transparent_2px,#fff_2px)] bg-[length:6px_6px] pointer-events-none" />
             </div>
           ) : (
-            /* Structured Fiscal Overview */
+            /* Structured Overview */
             <div className="w-full bg-white rounded-xl border border-[#c4c6ce]/60 p-4 space-y-4 text-xs">
               <div className="grid grid-cols-2 gap-3">
                 <div className="p-3 rounded-lg bg-[#f0f3ff] border border-[#c4c6ce]/40 space-y-1">
-                  <span className="text-[10px] text-[#74777e] font-bold uppercase">Documento Fiscal</span>
-                  <div className="font-bold text-[#001229] text-sm">NFC-e nº {nfceNum}</div>
-                  <div className="text-[11px] text-[#44474d]">Série {serie} • Homologado SEFAZ</div>
+                  <span className="text-[10px] text-[#74777e] font-bold uppercase">Documento</span>
+                  <div className="font-bold text-[#001229] text-sm">Cupom Não Fiscal</div>
+                  <div className="text-[11px] text-[#44474d]">Pedido nº {orderNum}</div>
                 </div>
 
                 <div className="p-3 rounded-lg bg-[#f0f3ff] border border-[#c4c6ce]/40 space-y-1">
@@ -915,7 +855,7 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
 
               <div className="border border-[#c4c6ce]/40 rounded-lg overflow-hidden">
                 <div className="bg-[#e7eeff] px-3 py-2 font-bold text-[#001229] text-[11px] flex justify-between">
-                  <span>Itens Faturados ({items.length})</span>
+                  <span>Itens Vendidos ({items.length})</span>
                   <span>Qtd. Total: {totalItemsCount}</span>
                 </div>
                 <div className="divide-y divide-[#c4c6ce]/30 max-h-48 overflow-y-auto">
@@ -938,13 +878,16 @@ export const FinalizeSaleModal: React.FC<FinalizeSaleModalProps> = ({
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-900 space-y-1">
                 <div className="flex items-center gap-1.5 font-bold">
                   <span className="material-symbols-outlined text-base">verified</span>
-                  <span>Autorização de Uso Concedida</span>
+                  <span>Venda Finalizada com Sucesso</span>
                 </div>
                 <p className="text-[11px] text-emerald-800">
-                  Protocolo SEFAZ: <span className="font-mono font-bold">{protocol}</span>
+                  {STORE_CONFIG.fullAddress}
                 </p>
-                <p className="text-[10px] text-emerald-700 font-mono break-all">
-                  Chave: {accessKey}
+                <p className="text-[11px] text-emerald-800">
+                  CNPJ: {STORE_CONFIG.cnpj} • Telefone: {STORE_CONFIG.phone}
+                </p>
+                <p className="text-[10px] text-emerald-700 font-mono">
+                  {STORE_CONFIG.policyNotice}
                 </p>
               </div>
             </div>
