@@ -1,0 +1,6 @@
+{
+  "name": "MarquesColor POS Pro",
+  "description": "Sistema Comercial, Tintometria & Frente de Caixa para Varejo de Tintas e Revestimentos",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
