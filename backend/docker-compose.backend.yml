@@ -1,0 +1,104 @@
+# PROPOSTA — não aplicado. Nenhum destes serviços foi construído ou
+# iniciado por esta sessão de desenvolvimento, que não tem acesso à VPS
+# onde isto rodaria. Ver DEPLOYMENT_RUNBOOK.md para o passo a passo de
+# quem for aplicar isto de fato.
+#
+# Stack TOTALMENTE separada do projeto "darioos" (WhatsApp) que já roda
+# na mesma VPS — Postgres próprio aqui, não o mesmo contêiner/banco do
+# DarioOS. Marquescolor é um cliente diferente; misturar o banco dele no
+# mesmo Postgres do DarioOS trocaria uma garantia de isolamento (dois
+# contêineres/bancos completamente separados, trivial de provar) por uma
+# mais fraca (uma única role com permissão restrita dentro do mesmo
+# banco, que depende de nenhum GRANT futuro por engano quebrar isso).
+# Mantém os dois projetos ("darioos" e esta stack) sem nenhuma referência
+# cruzada — nenhuma rede, contêiner ou credencial compartilhada.
+#
+# Dois serviços de aplicação a partir da MESMA imagem (ver Dockerfile),
+# nunca combinados num único contêiner:
+#   api:    FastAPI só-leitura (app/api.py) — o frontend React consome
+#           daqui em vez do estado fictício em memória que tem hoje.
+#   worker: loop de polling IMAP + ingestão (app/worker.py) — processo
+#           totalmente separado da api; a troca de dados entre os dois é
+#           só o banco, nunca uma chamada direta.
+#
+# Uso (só depois de autorizado):
+#   docker compose -f docker-compose.backend.yml build
+#   docker compose -f docker-compose.backend.yml up -d
+
+name: marquescolor-backend
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${MARQUESCOLOR_DB_USER:?set in .env}
+      POSTGRES_PASSWORD: ${MARQUESCOLOR_DB_PASSWORD:?set in .env}
+      POSTGRES_DB: ${MARQUESCOLOR_DB_NAME:-marquescolor}
+    volumes:
+      - marquescolor_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${MARQUESCOLOR_DB_USER:-marquescolor} -d ${MARQUESCOLOR_DB_NAME:-marquescolor}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [marquescolor]
+
+  api:
+    build: .
+    image: marquescolor-backend:latest
+    command: ["uvicorn", "app.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${MARQUESCOLOR_DB_USER:?set in .env}:${MARQUESCOLOR_DB_PASSWORD:?set in .env}@postgres:5432/${MARQUESCOLOR_DB_NAME:-marquescolor}
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [marquescolor]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+  worker:
+    build: .
+    image: marquescolor-backend:latest
+    command: ["python", "-m", "app"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${MARQUESCOLOR_DB_USER:?set in .env}:${MARQUESCOLOR_DB_PASSWORD:?set in .env}@postgres:5432/${MARQUESCOLOR_DB_NAME:-marquescolor}
+      IMAP_HOST: ${IMAP_HOST:-outlook.office365.com}
+      IMAP_PORT: ${IMAP_PORT:-993}
+      IMAP_USER: ${IMAP_USER:-}
+      IMAP_PASSWORD: ${IMAP_PASSWORD:-}
+      IMAP_MAILBOX: ${IMAP_MAILBOX:-INBOX}
+      IMAP_PROCESSED_MAILBOX: ${IMAP_PROCESSED_MAILBOX:-Processado}
+      POLL_INTERVAL_SECONDS: ${POLL_INTERVAL_SECONDS:-300}
+      # Desligado até alguém confirmar as credenciais de IMAP e decidir
+      # ligar de fato — nunca true por padrão.
+      INGEST_ENABLED: ${INGEST_ENABLED:-false}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [marquescolor]
+    healthcheck:
+      test:
+        [
+          "CMD", "python", "-c",
+          "import json,os,sys,time; p='/tmp/marquescolor_worker_heartbeat'; d=json.load(open(p)); sys.exit(0 if time.time()-os.path.getmtime(p)<900 and d.get('healthy') else 1)"
+        ]
+      interval: 60s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  marquescolor_postgres_data:
+
+networks:
+  marquescolor:
+    driver: bridge
