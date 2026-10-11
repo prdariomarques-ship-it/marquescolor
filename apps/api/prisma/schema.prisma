@@ -1,0 +1,420 @@
+// Marquescollor Tintas - schema Prisma COMPLETO (20 modelos) com @relation
+// Etapa B2 adiciona RefreshToken. Modulos restantes implementados em B3-B16.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Usuario {
+  id              String    @id @default(cuid())
+  nome            String
+  login           String    @unique
+  senhaHash       String
+  papel           String    @default("VENDEDOR") // ADMIN | GERENTE | VENDEDOR | CAIXA
+  ativo           Boolean   @default(true)
+  deveTrocarSenha Boolean   @default(true)
+  ultimoLogin     DateTime?
+  criadoEm        DateTime  @default(now())
+  atualizadoEm    DateTime  @updatedAt
+
+  refreshTokens RefreshToken[]
+
+  @@index([papel])
+  @@index([ativo])
+}
+
+model RefreshToken {
+  id          String   @id @default(cuid())
+  usuarioId   String
+  token       String   @unique
+  expiraEm    DateTime
+  revogado    Boolean  @default(false)
+  criadoEm    DateTime @default(now())
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([usuarioId])
+  @@index([token])
+  @@index([expiraEm])
+}
+
+model Auditoria {
+  id          String   @id @default(cuid())
+  usuarioId   String?
+  acao        String
+  entidade    String
+  entidadeId  String?
+  dadosAntes  String?
+  dadosDepois String?
+  ip          String?
+  criadoEm    DateTime @default(now())
+
+  @@index([entidade, entidadeId])
+  @@index([usuarioId])
+}
+
+model Categoria {
+  id           String   @id @default(cuid())
+  nome         String   @unique
+  corHex       String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  produtos Produto[]
+}
+
+model Marca {
+  id           String   @id @default(cuid())
+  nome         String   @unique
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  produtos Produto[]
+}
+
+model Produto {
+  id                     String   @id @default(cuid())
+  codigoInterno          String   @unique
+  codigoBarras           String?  @unique
+  nome                   String
+  descricao              String?
+  marcaId                String?
+  categoriaId            String?
+  subcategoria           String?
+  unidade                String   @default("UN")
+  cor                    String?
+  acabamento             String?
+  volume                 String?
+  precoCustoCentavos     Int      @default(0)
+  precoVendaCentavos     Int      @default(0)
+  margemPercentual       Float    @default(0)
+  estoqueAtual           Float    @default(0)
+  estoqueMinimo          Float    @default(0)
+  estoqueMaximo          Float    @default(0)
+  localizacao            String?
+  fornecedorPrincipalId  String?
+  fotoUrl                String?
+  ativo                  Boolean  @default(true)
+  criadoEm               DateTime @default(now())
+  atualizadoEm           DateTime @updatedAt
+
+  marca          Marca?              @relation(fields: [marcaId], references: [id])
+  categoria      Categoria?          @relation(fields: [categoriaId], references: [id])
+  movimentacoes  MovimentacaoEstoque[]
+  itensVenda     ItemVenda[]
+  itensCompra    ItemCompra[]
+  itensOrcamento ItemOrcamento[]
+
+  @@index([marcaId])
+  @@index([categoriaId])
+  @@index([ativo])
+}
+
+model MovimentacaoEstoque {
+  id             String   @id @default(cuid())
+  produtoId      String
+  tipo           String
+  quantidade     Float
+  saldoAnterior  Float
+  saldoPosterior Float
+  motivo         String?
+  documentoRef   String?
+  usuarioId      String?
+  criadoEm       DateTime @default(now())
+
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@index([produtoId])
+  @@index([tipo])
+}
+
+model Cliente {
+  id                    String   @id @default(cuid())
+  nome                  String
+  cpfCnpj               String?  @unique
+  telefone              String?
+  whatsapp              String?
+  email                 String?
+  cep                   String?
+  endereco              String?
+  numero                String?
+  complemento           String?
+  bairro                String?
+  cidade                String?
+  uf                    String?
+  observacoes           String?
+  limiteCreditoCentavos Int      @default(0)
+  ativo                 Boolean  @default(true)
+  criadoEm              DateTime @default(now())
+  atualizadoEm          DateTime @updatedAt
+
+  vendas        Venda[]
+  orcamentos    Orcamento[]
+  contasReceber ContaReceber[]
+
+  @@index([nome])
+  @@index([ativo])
+}
+
+model Fornecedor {
+  id           String   @id @default(cuid())
+  razaoSocial  String
+  nomeFantasia String?
+  cnpj         String?  @unique
+  telefone     String?
+  whatsapp     String?
+  email        String?
+  cep          String?
+  endereco     String?
+  numero       String?
+  complemento  String?
+  bairro       String?
+  cidade       String?
+  uf           String?
+  contato      String?
+  observacoes  String?
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  compras     Compra[]
+  contasPagar ContaPagar[]
+
+  @@index([razaoSocial])
+  @@index([ativo])
+}
+
+model Venda {
+  id                 String    @id @default(cuid())
+  numero             Int       @unique
+  status             String    @default("RASCUNHO")
+  clienteId          String?
+  usuarioId          String
+  caixaId            String?
+  subtotalCentavos   Int       @default(0)
+  descontoCentavos   Int       @default(0)
+  acrescimoCentavos  Int       @default(0)
+  totalCentavos      Int       @default(0)
+  canceladaEm        DateTime?
+  canceladaPorId     String?
+  motivoCancelamento String?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+
+  cliente    Cliente?        @relation(fields: [clienteId], references: [id])
+  itens      ItemVenda[]
+  pagamentos PagamentoVenda[]
+
+  @@index([status])
+  @@index([clienteId])
+  @@index([usuarioId])
+  @@index([caixaId])
+}
+
+model ItemVenda {
+  id                    String   @id @default(cuid())
+  vendaId               String
+  produtoId             String
+  quantidade            Float
+  precoUnitarioCentavos Int
+  descontoItemCentavos  Int      @default(0)
+  subtotalCentavos      Int
+  nomeProdutoSnapshot   String
+  codigoSnapshot        String
+  criadoEm              DateTime @default(now())
+
+  venda   Venda   @relation(fields: [vendaId], references: [id])
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@index([vendaId])
+  @@index([produtoId])
+}
+
+model PagamentoVenda {
+  id            String   @id @default(cuid())
+  vendaId       String
+  forma         String
+  valorCentavos Int
+  parcelas      Int      @default(1)
+  bandeira      String?
+  observacao    String?
+  criadoEm      DateTime @default(now())
+
+  venda Venda @relation(fields: [vendaId], references: [id])
+
+  @@index([vendaId])
+  @@index([forma])
+}
+
+model CaixaSessao {
+  id                              String    @id @default(cuid())
+  usuarioAberturaId               String
+  usuarioFechamentoId             String?
+  abertoEm                        DateTime  @default(now())
+  fechadoEm                       DateTime?
+  status                          String    @default("ABERTO")
+  valorAberturaCentavos           Int       @default(0)
+  valorFechamentoInformadoCentavos Int?
+  valorFechamentoEsperadoCentavos Int?
+  diferencaCentavos               Int?
+  observacao                      String?
+
+  movimentacoes MovimentacaoCaixa[]
+
+  @@index([status])
+}
+
+model MovimentacaoCaixa {
+  id            String   @id @default(cuid())
+  caixaId       String
+  tipo          String
+  valorCentavos Int
+  descricao     String?
+  usuarioId     String?
+  criadoEm      DateTime @default(now())
+
+  caixa CaixaSessao @relation(fields: [caixaId], references: [id])
+
+  @@index([caixaId])
+  @@index([tipo])
+}
+
+model Compra {
+  id               String   @id @default(cuid())
+  fornecedorId     String
+  numeroPedido     String?
+  dataCompra       DateTime @default(now())
+  subtotalCentavos Int      @default(0)
+  descontoCentavos Int      @default(0)
+  freteCentavos    Int      @default(0)
+  totalCentavos    Int      @default(0)
+  formaPagamento   String?
+  observacoes      String?
+  usuarioId        String
+  status           String   @default("RASCUNHO")
+  criadoEm         DateTime @default(now())
+
+  fornecedor Fornecedor  @relation(fields: [fornecedorId], references: [id])
+  itens      ItemCompra[]
+
+  @@index([fornecedorId])
+  @@index([status])
+}
+
+model ItemCompra {
+  id                 String   @id @default(cuid())
+  compraId           String
+  produtoId          String
+  quantidade         Float
+  precoCustoCentavos Int
+  subtotalCentavos   Int
+
+  compra  Compra  @relation(fields: [compraId], references: [id])
+  produto Produto @relation(fields: [produtoId], references: [id])
+
+  @@index([compraId])
+  @@index([produtoId])
+}
+
+model Orcamento {
+  id               String    @id @default(cuid())
+  numero           Int       @unique
+  clienteId        String?
+  usuarioId        String
+  validade         DateTime?
+  status           String    @default("ABERTO")
+  subtotalCentavos Int       @default(0)
+  descontoCentavos Int       @default(0)
+  totalCentavos    Int       @default(0)
+  observacoes      String?
+  criadoEm         DateTime  @default(now())
+
+  cliente Cliente?       @relation(fields: [clienteId], references: [id])
+  itens   ItemOrcamento[]
+
+  @@index([status])
+  @@index([clienteId])
+}
+
+model ItemOrcamento {
+  id                    String   @id @default(cuid())
+  orcamentoId           String
+  produtoId             String
+  quantidade            Float
+  precoUnitarioCentavos Int
+  descontoItemCentavos  Int      @default(0)
+  subtotalCentavos      Int
+
+  orcamento Orcamento @relation(fields: [orcamentoId], references: [id])
+  produto   Produto   @relation(fields: [produtoId], references: [id])
+
+  @@index([orcamentoId])
+  @@index([produtoId])
+}
+
+model ContaReceber {
+  id                String    @id @default(cuid())
+  clienteId         String?
+  vendaId           String?
+  descricao         String
+  valorCentavos     Int
+  vencimento        DateTime
+  pagoEm            DateTime?
+  valorPagoCentavos Int?
+  status            String    @default("PENDENTE")
+  formaPagamento    String?
+  criadoEm          DateTime  @default(now())
+
+  cliente Cliente? @relation(fields: [clienteId], references: [id])
+
+  @@index([status])
+  @@index([clienteId])
+  @@index([vencimento])
+}
+
+model ContaPagar {
+  id                String    @id @default(cuid())
+  fornecedorId      String?
+  compraId          String?
+  descricao         String
+  valorCentavos     Int
+  vencimento        DateTime
+  pagoEm            DateTime?
+  valorPagoCentavos Int?
+  status            String    @default("PENDENTE")
+  formaPagamento    String?
+  criadoEm          DateTime  @default(now())
+
+  fornecedor Fornecedor? @relation(fields: [fornecedorId], references: [id])
+
+  @@index([status])
+  @@index([fornecedorId])
+  @@index([vencimento])
+}
+
+model Configuracao {
+  id                      String  @id @default("unica")
+  nomeLoja                String  @default("Marquescollor Tintas")
+  cnpj                    String?
+  inscricaoEstadual       String?
+  endereco                String?
+  telefone                String?
+  whatsapp                String?
+  logoUrl                 String?
+  proximoNumeroVenda      Int     @default(1)
+  permitirVendaSemEstoque Boolean @default(true)
+  impressoraNome          String?
+  larguraCupomMm          Int     @default(80)
+  imprimirAuto            Boolean @default(false)
+  cabecalhoCupom          String?
+  rodapeCupom             String?
+  mensagemFinal           String?
+  formasPagamentoAtivas   String?
+}
