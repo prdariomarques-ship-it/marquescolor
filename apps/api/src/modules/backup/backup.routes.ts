@@ -28,6 +28,32 @@ const ordemRestauracao = [
   'contaReceber', 'contaPagar', 'auditoria',
 ] as const;
 
+const camposDateTime = new Set([
+  'ultimoLogin', 'criadoEm', 'atualizadoEm', 'expiraEm', 'canceladaEm',
+  'abertoEm', 'fechadoEm', 'dataCompra', 'validade', 'vencimento', 'pagoEm',
+]);
+const camposDateTimeOpcionais = new Set(['ultimoLogin', 'canceladaEm', 'fechadoEm', 'validade', 'pagoEm']);
+
+function normalizarDatasRegistro(registro: Record<string, any>): Record<string, any> {
+  const normalizado = { ...registro };
+  for (const campo of camposDateTime) {
+    const valor = normalizado[campo];
+    if (valor === null || valor === undefined) continue;
+    if (valor === '' && camposDateTimeOpcionais.has(campo)) {
+      normalizado[campo] = null;
+      continue;
+    }
+    if (typeof valor === 'string' || typeof valor === 'number') {
+      const data = new Date(valor);
+      if (Number.isNaN(data.getTime())) throw new Error(`Data inválida no campo ${campo}.`);
+      normalizado[campo] = data;
+    } else if (!(valor instanceof Date)) {
+      throw new Error(`Formato de data inválido no campo ${campo}.`);
+    }
+  }
+  return normalizado;
+}
+
 const envelopeSchema = z.object({
   format: z.literal('MARQUESCOLOR_BACKUP').optional(),
   version: z.number().int().positive().optional(),
@@ -106,7 +132,7 @@ export const backupRoutes: FastifyPluginAsync = async (app) => {
           const registros = data[tabela] || [];
           for (const registro of registros) {
             // @ts-ignore
-            await (tx as any)[tabela].create({ data: registro });
+            await (tx as any)[tabela].create({ data: normalizarDatasRegistro(registro) });
           }
         }
       }, { timeout: 120000 });
