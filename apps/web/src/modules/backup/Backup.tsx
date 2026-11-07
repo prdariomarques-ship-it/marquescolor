@@ -101,8 +101,9 @@ export default function Backup() {
     setRestaurando(true); setErro(null); setMensagem(null);
     try {
       await api.backup.restaurar(payload);
-      setMensagem('Backup restaurado. A aplicação será recarregada para consultar os dados restaurados.');
-      window.setTimeout(() => window.location.reload(), 1200);
+      setMensagem('Backup restaurado. Entre novamente com um usuário presente no arquivo restaurado.');
+      api.clearTokens();
+      window.setTimeout(() => { window.location.href = '/login'; }, 1200);
     } catch (e: any) { setErro(e.message || 'Não foi possível restaurar o backup.'); }
     finally { setRestaurando(false); }
   }
