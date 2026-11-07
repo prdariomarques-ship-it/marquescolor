@@ -398,11 +398,7 @@ export const api = {
 
   // Backup
   backup: {
-    exportar: async () => {
-      const token = getToken();
-      const res = await fetch('/api/backup/exportar', { headers: { Authorization: token ? `Bearer ${token}` : '' } });
-      return await res.json();
-    },
+    exportar: () => request<any>('/backup/exportar'),
     restaurar: (dados: any) => request('/backup/restaurar', { method: 'POST', body: JSON.stringify(dados) }),
   },
 
