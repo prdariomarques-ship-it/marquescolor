@@ -160,7 +160,7 @@ export default function Vendas() {
       } else {
         const escapar = (valor: any) => {
           let texto = String(valor ?? '');
-          if (/^[=+@-]/.test(texto)) texto = `'${texto}`;
+          if (typeof valor === 'string' && /^[=+@-]/.test(texto)) texto = `'${texto}`;
           return `"${texto.replace(/"/g, '""')}"`;
         };
         const csvRows = [
