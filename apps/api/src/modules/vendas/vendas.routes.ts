@@ -17,15 +17,12 @@ export const vendasRoutes: FastifyPluginAsync = async (app) => {
     if (q.dataInicio || q.dataFim) {
       where.criadoEm = {};
       if (q.dataInicio) {
-        const inicio = new Date(q.dataInicio);
+        const inicio = new Date(`${q.dataInicio}T00:00:00`);
         if (!Number.isNaN(inicio.getTime())) where.criadoEm.gte = inicio;
       }
       if (q.dataFim) {
-        const fim = new Date(q.dataFim);
-        if (!Number.isNaN(fim.getTime())) {
-          fim.setHours(23, 59, 59, 999);
-          where.criadoEm.lte = fim;
-        }
+        const fim = new Date(`${q.dataFim}T23:59:59.999`);
+        if (!Number.isNaN(fim.getTime())) where.criadoEm.lte = fim;
       }
     }
     const [total, vendas] = await Promise.all([
@@ -89,18 +86,20 @@ export const vendasRoutes: FastifyPluginAsync = async (app) => {
         pagamentos: true,
       },
       orderBy: { criadoEm: 'asc' },
-      take: 20000,
+      take: 20001,
     });
+    const limiteAplicado = vendas.length > 20000;
+    const vendasExportadas = vendas.slice(0, 20000);
     const operadores = await prisma.usuario.findMany({
-      where: { id: { in: [...new Set(vendas.map(v => v.usuarioId))] } },
+      where: { id: { in: [...new Set(vendasExportadas.map(v => v.usuarioId))] } },
       select: { id: true, nome: true },
     });
     const nomes = new Map(operadores.map(op => [op.id, op.nome]));
     return reply.send({
       exportadoEm: new Date().toISOString(),
-      totalRegistros: vendas.length,
-      limiteAplicado: vendas.length === 20000,
-      vendas: vendas.map(v => ({
+      totalRegistros: vendasExportadas.length,
+      limiteAplicado,
+      vendas: vendasExportadas.map(v => ({
         ...v,
         operadorNome: nomes.get(v.usuarioId) || 'Operador desativado',
         clienteNome: v.cliente?.nome || 'Anonima',
