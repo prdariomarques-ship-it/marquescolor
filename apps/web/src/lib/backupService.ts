@@ -106,11 +106,16 @@ export async function lerEValidarBackup(file: File | Blob, filename = ''): Promi
   if (payload?.format === 'MARQUESCOLOR_BACKUP' && payload.version !== 1) {
     throw new Error('A versão deste backup não é compatível com esta aplicação.');
   }
-  if (payload?.checksumAlgo === 'SHA-256' && payload?.checksum) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    throw new Error('Estrutura de backup inválida.');
+  }
+  if (payload?.checksumAlgo || payload?.checksum) {
+    if (payload.checksumAlgo !== 'SHA-256' || typeof payload.checksum !== 'string') {
+      throw new Error('Metadados de integridade do backup inválidos.');
+    }
     const actual = await sha256(JSON.stringify(payload.data || payload));
     if (actual !== payload.checksum) throw new Error('A validação de integridade falhou. O arquivo pode estar danificado ou alterado.');
   }
-  if (!payload?.data && typeof payload !== 'object') throw new Error('Estrutura de backup inválida.');
   return payload;
 }
 
