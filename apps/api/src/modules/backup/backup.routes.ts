@@ -17,7 +17,7 @@ const ordemExclusao = [
   'movimentacaoEstoque', 'movimentacaoCaixa', 'contaReceber', 'contaPagar',
   'venda', 'orcamento', 'compra', 'caixaSessao', 'produto',
   'cliente', 'fornecedor', 'categoria', 'marca', 'metaMensal',
-  'auditoria', 'usuario', 'configuracao',
+  'auditoria', 'refreshToken', 'usuario', 'configuracao',
 ] as const;
 
 const ordemRestauracao = [
