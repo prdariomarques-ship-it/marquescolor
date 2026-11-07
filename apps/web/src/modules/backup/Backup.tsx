@@ -21,9 +21,10 @@ function tamanho(bytes: number): string {
 }
 
 function nomeSnapshot(info: LocalBackupInfo): string {
+  const timestamp = info.createdAt.replace(/[:.]/g, '-');
   return info.compression === 'gzip'
-    ? `marquescolor-snapshot-${info.id}.mcbackup.json.gz`
-    : `marquescolor-snapshot-${info.id}.mcbackup.json`;
+    ? `marquescolor-snapshot-${timestamp}.mcbackup.json.gz`
+    : `marquescolor-snapshot-${timestamp}.mcbackup.json`;
 }
 
 export default function Backup() {
