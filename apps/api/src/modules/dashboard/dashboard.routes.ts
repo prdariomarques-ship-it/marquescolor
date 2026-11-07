@@ -111,7 +111,7 @@ export const dashboardRoutes: FastifyPluginAsync = async (app) => {
 
     const sugestoes = {
       conservador: Math.round(mediaPonderada * 1.05),
-      moderado: Math.round(mediaPonderada * (1 + crescimentoTendencia)),
+      moderado: Math.round(mediaPonderada * 1.10),
       arrojado: Math.round(mediaPonderada * 1.18),
     };
 
