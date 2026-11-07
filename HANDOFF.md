@@ -241,3 +241,48 @@ O projeto está completo quando, no Windows do usuário:
 14. ✅ Faz backup (exporta JSON) e restaura (upload JSON)
 15. ✅ 4 níveis de acesso (ADMIN, GERENTE, VENDEDOR, CAIXA)
 16. ✅ Dados persistem após reiniciar (SQLite local)
+
+---
+
+## 11. B17 — Metas reais, exportação contábil e backup GZIP operacional
+
+### Metas mensais
+- Tabela `MetaMensal` persistida no SQLite, com competência `YYYY-MM`, valor em centavos, cenário, origem e data de atualização.
+- `GET /api/dashboard/metas`: faturamento do mês por vendas FINALIZADAS, progresso, saldo para a meta, ritmo diário e histórico dos seis meses completos anteriores.
+- Sugestões determinísticas com média móvel ponderada (pesos 1 a 6), comparação das médias dos três meses recentes e três anteriores, tendência limitada a -15%/+30% e cenários conservador (+5%), tendência e expansão (+18%).
+- `PUT /api/dashboard/metas`: salva a meta do mês para ADMIN/GERENTE.
+- Gauge no Dashboard e aplicação de sugestão com um clique, persistindo no banco.
+
+### Histórico e exportação contábil
+- Filtros por data, status, operador e forma de pagamento na listagem de vendas.
+- Presets Hoje, Ontem, Últimos 7 dias, Últimos 30 dias e Todo o período, além de intervalo personalizado.
+- `GET /api/vendas/exportar`: busca os registros filtrados no servidor, com cliente, operador, pagamentos e itens. Limite de segurança: 20.000 vendas por arquivo, com sinalização explícita quando atingido.
+- CSV com separador `;`, UTF-8 com BOM, CRLF e proteção contra fórmulas de planilha.
+- XLSX verdadeiro, sem dependência de serviço externo, com as abas `1_Vendas_Periodo`, `2_Itens_Detalhados` e `3_Conciliacao`.
+
+### Backup e restauração
+- Backup do banco completo em envelope versionado `MARQUESCOLOR_BACKUP`, incluindo a tabela MetaMensal e os módulos operacionais existentes.
+- GZIP nativo do navegador quando disponível, fallback JSON quando não houver suporte e checksum SHA-256 validado antes da restauração.
+- Últimos cinco snapshots no IndexedDB do navegador, com download manual e opção de download periódico.
+- Agendamento no navegador a cada 5, 15, 30 ou 60 minutos. O agendamento só executa enquanto a aplicação estiver aberta e um administrador estiver autenticado; não é um serviço em segundo plano do sistema operacional/servidor.
+- Restauração transacional, com validação de versão, integridade, tabelas obrigatórias e limpeza das sessões de refresh antes da recriação dos usuários.
+- Compatibilidade com backups JSON antigos sem envelope versionado. Em backups antigos, `metaMensal` pode estar ausente.
+
+### Atualização de uma instalação existente
+
+Depois de atualizar os arquivos da aplicação:
+
+```powershell
+npm install
+npm run db:push
+npm run build
+npm run test
+```
+
+Faça um backup manual antes de atualizar o banco. O `db:push` adiciona a tabela MetaMensal ao banco SQLite existente. Os dados operacionais continuam persistidos no SQLite da API; localStorage/IndexedDB são usados apenas para preferências e cópias locais do backup.
+
+### Validação
+
+- Workflow GitHub Actions: `.github/workflows/quality.yml`.
+- O workflow instala dependências, compila API + web e executa os testes de API.
+- A existência do workflow não substitui o teste de aceitação na máquina da loja, com banco e dados reais, impressora e navegadores usados na operação.
