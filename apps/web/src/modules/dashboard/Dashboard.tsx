@@ -153,7 +153,7 @@ export default function Dashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 {([
                   ['conservador', 'Conservadora', '5% acima da média'],
-                  ['moderado', 'Tendência', `${meta.crescimentoTendenciaPct > 0 ? '+' : ''}${meta.crescimentoTendenciaPct}% pela tendência`],
+                  ['moderado', 'Tendência semestral', '+10% sobre a média'],
                   ['arrojado', 'Expansão', '18% acima da média'],
                 ] as const).map(([key, label, descricao]) => (
                   <div key={key} className="border border-slate-200 rounded p-3">
