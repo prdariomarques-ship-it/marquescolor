@@ -180,7 +180,7 @@ export default function Vendas() {
             return linhas;
           }),
         ];
-        const csv = '\\uFEFF' + csvRows.map(row => row.map(escapar).join(';')).join('\\r\\n');
+        const csv = '\uFEFF' + csvRows.map(row => row.map(escapar).join(';')).join('\r\n');
         const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a'); a.href = url; a.download = `${nome}.csv`; a.click();
