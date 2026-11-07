@@ -86,6 +86,12 @@ export const backupRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ erro: `O conteúdo de ${key} não é uma lista válida.` });
       }
     }
+    // Só metaMensal pode faltar em backups criados antes da inclusão do módulo.
+    const obrigatorias = tabelas.filter(tabela => tabela !== 'metaMensal');
+    const ausentes = obrigatorias.filter(tabela => !Object.prototype.hasOwnProperty.call(data, tabela));
+    if (ausentes.length) {
+      return reply.code(400).send({ erro: `Backup incompleto. Tabelas ausentes: ${ausentes.join(', ')}` });
+    }
     if (!data.configuracao || !data.configuracao.length) {
       return reply.code(400).send({ erro: 'O backup não contém a configuração da loja.' });
     }
