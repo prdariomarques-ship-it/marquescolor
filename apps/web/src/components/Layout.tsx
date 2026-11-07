@@ -1,6 +1,7 @@
 import { useAuth } from '../stores/auth';
 import { useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
 import { LogOut, LayoutDashboard, Users, Package, Tag, FolderTree, UserCircle, Truck, Boxes, History, ShoppingCart, Receipt, Wallet, Settings, FileText, TrendingUp, ClipboardList, Banknote, DatabaseBackup } from 'lucide-react';
+import BackupScheduler from '../modules/backup/BackupScheduler';
 
 export function Layout() {
   const { usuario, logout } = useAuth();
@@ -35,6 +36,7 @@ export function Layout() {
 
   return (
     <div className="min-h-screen bg-fundo flex flex-col">
+      <BackupScheduler />
       <header className="bg-azul text-white shadow-md">
         <div className="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
