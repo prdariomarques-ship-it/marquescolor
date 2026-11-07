@@ -63,6 +63,7 @@ export const backupRoutes: FastifyPluginAsync = async (app) => {
   });
 
   app.post('/backup/restaurar', {
+    bodyLimit: 50 * 1024 * 1024,
     preHandler: [authenticate, requireRole('ADMIN')],
   }, async (req, reply) => {
     const parsed = envelopeSchema.safeParse(req.body);
