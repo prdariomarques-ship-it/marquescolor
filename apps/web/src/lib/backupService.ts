@@ -65,7 +65,7 @@ export async function criarBackupComprimido(dados: any): Promise<{
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
 
   if ('CompressionStream' in globalThis) {
-    const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream('gzip'));
+    const stream = new Blob([bytes.buffer as ArrayBuffer]).stream().pipeThrough(new CompressionStream('gzip'));
     const blob = await new Response(stream).blob();
     return {
       blob,
@@ -76,7 +76,7 @@ export async function criarBackupComprimido(dados: any): Promise<{
     };
   }
 
-  const blob = new Blob([bytes], { type: 'application/json;charset=utf-8' });
+  const blob = new Blob([bytes.buffer as ArrayBuffer], { type: 'application/json;charset=utf-8' });
   return {
     blob,
     filename: `marquescolor-${timestamp}.mcbackup.json`,
