@@ -86,6 +86,8 @@ No código verificado (`compras.routes.ts`), confirmar uma compra faz `produto.u
 - **não cria** `Compra` na aprovação (qualquer `Compra` em status ≠ `CONFIRMADA` poderia ser confirmada por essa rota, movendo estoque e custo, e depois a NF-e duplicaria o estoque);
 - cria a `Compra` **já `CONFIRMADA` na mesma transação** que atualiza o estoque (`ItemCompra.precoCustoCentavos` = unitário da NF, **apenas informativo**; o `Produto.precoCustoCentavos` não é tocado).
 
+`ItemCompra` criado pelo fluxo de NF-e é **informativo e pode não reconciliar** (`quantidade × precoCustoCentavos ≠ subtotalCentavos`): `quantidade` = quantidade **recebida**, `precoCustoCentavos` = unitário da NF (arredondado), `subtotalCentavos` = `vProd` da NF; recebimento parcial ou unidade diferente (ex.: 6 UN recebidas de 1 CX a R$ 60) quebram a igualdade. Verificado por busca no código: nenhum módulo de relatórios/financeiro/dashboard/estoque lê `Compra`/`ItemCompra` hoje (só `compras`, `backup` e este módulo); se isso mudar, o consumidor deve usar `dados-custo`, não `ItemCompra`.
+
 Se o módulo de custo quiser atualizar custo, deve fazê-lo por mecanismo próprio e aprovado. **Recomendação ao GLM:** revisar `/compras/:id/confirmar` e `POST /compras`, que hoje atualizam custo automaticamente (contradiz "nenhuma atualização automática de preços").
 
 ### 4.3 Fontes não-XML
