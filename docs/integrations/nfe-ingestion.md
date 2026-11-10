@@ -151,7 +151,7 @@ Como rodar: `npm test -w apps/api` (usa `scripts/run-tests.mjs`: cria `apps/api/
 
 ## 13. Status do PR e pendências para sair de Draft
 
-**PR:** *Draft*, origem `feat/nfe-ingestion-typescript`, base `feat/metas-exportacao-backup-operacional` (B17, PR #1). O diff contra essa base contém **8 commits** (`31855e8`, `ebddbc5`, `1c0ad17`, `69db00f`, `ab7caf7`, `ba5703b`, `e11bac4` e este de documentação) — 53 arquivos, sem contar o `package-lock.json`. Não deve ser marcado como pronto para integração enquanto houver pendência abaixo. **Não** mesclar, **não** fazer deploy, **não** tocar na `main`.
+**PR:** *Draft*, origem `feat/nfe-ingestion-typescript`, base `feat/metas-exportacao-backup-operacional` (B17, PR #1). O diff contra essa base contém **8 commits de código/testes/docs** (`31855e8`, `ebddbc5`, `1c0ad17`, `69db00f`, `ab7caf7`, `ba5703b`, `e11bac4`, `1cad208`) **mais os commits de documentação de status posteriores** (conferir com `git log origin/feat/metas-exportacao-backup-operacional..HEAD`; a contagem exata cresce a cada commit de documentação) — 53 arquivos de código/docs na contagem dos 8 primeiros, sem o `package-lock.json`. Não deve ser marcado como pronto para integração enquanto houver pendência abaixo. **Não** mesclar, **não** fazer deploy, **não** tocar na `main`.
 
 **Pendências bloqueantes para "pronto para integração":**
 
