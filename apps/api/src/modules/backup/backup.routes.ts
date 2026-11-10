@@ -10,9 +10,17 @@ const tabelas = [
   'caixaSessao', 'movimentacaoCaixa', 'compra', 'itemCompra',
   'orcamento', 'itemOrcamento', 'contaReceber', 'contaPagar',
   'configuracao', 'auditoria', 'metaMensal',
+  // Fase 5 (NF-e): opcionais em backups antigos. Arquivos ORIGINAIS (XML/PDF) ficam em
+  // NFE_STORAGE_DIR e devem ser copiados junto (o backup JSON guarda so metadados + SHA-256).
+  'emailMensagem', 'documentoArquivo', 'nfeDocument', 'nfeItem', 'produtoFornecedorMap', 'reviewQueueItem', 'processingLog',
 ] as const;
 
+const tabelasOpcionais = new Set<string>([
+  'metaMensal', 'emailMensagem', 'documentoArquivo', 'nfeDocument', 'nfeItem', 'produtoFornecedorMap', 'reviewQueueItem', 'processingLog',
+]);
+
 const ordemExclusao = [
+  'processingLog', 'reviewQueueItem', 'nfeItem', 'produtoFornecedorMap', 'nfeDocument', 'documentoArquivo', 'emailMensagem',
   'itemVenda', 'pagamentoVenda', 'itemOrcamento', 'itemCompra',
   'movimentacaoEstoque', 'movimentacaoCaixa', 'contaReceber', 'contaPagar',
   'venda', 'orcamento', 'compra', 'caixaSessao', 'produto',
@@ -23,7 +31,8 @@ const ordemExclusao = [
 const ordemRestauracao = [
   'configuracao', 'usuario', 'categoria', 'marca', 'fornecedor',
   'cliente', 'produto', 'caixaSessao', 'venda', 'orcamento', 'compra',
-  'metaMensal', 'itemVenda', 'pagamentoVenda', 'itemOrcamento',
+  'metaMensal', 'emailMensagem', 'documentoArquivo', 'nfeDocument', 'nfeItem', 'produtoFornecedorMap', 'reviewQueueItem', 'processingLog',
+  'itemVenda', 'pagamentoVenda', 'itemOrcamento',
   'itemCompra', 'movimentacaoEstoque', 'movimentacaoCaixa',
   'contaReceber', 'contaPagar', 'auditoria',
 ] as const;
@@ -31,8 +40,12 @@ const ordemRestauracao = [
 const camposDateTime = new Set([
   'ultimoLogin', 'criadoEm', 'atualizadoEm', 'expiraEm', 'canceladaEm',
   'abertoEm', 'fechadoEm', 'dataCompra', 'validade', 'vencimento', 'pagoEm',
+  'recebidoEm', 'processadoEm', 'dataEmissao', 'aprovadoEm', 'rejeitadoEm', 'recebimentoFisicoEm', 'estoqueAtualizadoEm', 'resolvidoEm',
 ]);
-const camposDateTimeOpcionais = new Set(['ultimoLogin', 'canceladaEm', 'fechadoEm', 'validade', 'pagoEm']);
+const camposDateTimeOpcionais = new Set([
+  'ultimoLogin', 'canceladaEm', 'fechadoEm', 'validade', 'pagoEm',
+  'processadoEm', 'dataEmissao', 'aprovadoEm', 'rejeitadoEm', 'recebimentoFisicoEm', 'estoqueAtualizadoEm', 'resolvidoEm',
+]);
 
 function normalizarDatasRegistro(registro: Record<string, any>): Record<string, any> {
   const normalizado = { ...registro };
@@ -112,8 +125,8 @@ export const backupRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(400).send({ erro: `O conteúdo de ${key} não é uma lista válida.` });
       }
     }
-    // Só metaMensal pode faltar em backups criados antes da inclusão do módulo.
-    const obrigatorias = tabelas.filter(tabela => tabela !== 'metaMensal');
+    // Só tabelas de módulos adicionados depois (metas, NF-e) podem faltar em backups antigos.
+    const obrigatorias = tabelas.filter(tabela => !tabelasOpcionais.has(tabela));
     const ausentes = obrigatorias.filter(tabela => !Object.prototype.hasOwnProperty.call(data, tabela));
     if (ausentes.length) {
       return reply.code(400).send({ erro: `Backup incompleto. Tabelas ausentes: ${ausentes.join(', ')}` });

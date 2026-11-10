@@ -30,6 +30,7 @@
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
+    "@types/mailparser": "3.9.0",
     "@types/node": "^20.16.10",
     "dotenv-cli": "^8.0.0",
     "prisma": "^5.20.0",

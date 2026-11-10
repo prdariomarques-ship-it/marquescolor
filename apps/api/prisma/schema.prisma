@@ -117,6 +117,8 @@ model Produto {
   itensVenda     ItemVenda[]
   itensCompra    ItemCompra[]
   itensOrcamento ItemOrcamento[]
+  nfeItens       NfeItem[]
+  fornecedorMaps ProdutoFornecedorMap[]
 
   @@index([marcaId])
   @@index([categoriaId])
@@ -192,6 +194,8 @@ model Fornecedor {
 
   compras     Compra[]
   contasPagar ContaPagar[]
+  nfeDocumentos NfeDocument[]
+  produtoMaps   ProdutoFornecedorMap[]
 
   @@index([razaoSocial])
   @@index([ativo])
@@ -437,4 +441,224 @@ model MetaMensal {
   atualizadoEm      DateTime @updatedAt
 
   @@index([competencia])
+}
+
+// ============================================================================
+// FASE 5 - Inteligencia documental / NF-e (ADITIVO: nenhuma tabela existente e
+// alterada; apenas back-relations em Fornecedor e Produto).
+// Etapas SEPARADAS (nao misturar): documento recebido -> interpretado ->
+// conferido -> compra preparada -> compra aprovada -> mercadoria recebida
+// fisicamente -> estoque atualizado. "Custo atualizado" e "preco aprovado" NAO
+// sao definidos por este modulo (ver docs/integrations/nfe-pricing-contract.md).
+// Valores monetarios em centavos (Int). Sem JSON nativo no SQLite: JSON em String.
+// ============================================================================
+
+model EmailMensagem {
+  id            String    @id @default(cuid())
+  messageId     String    @unique // Message-ID; sem header => "sha256:<hash dos bytes brutos>" (deterministico)
+  conta         String? // rotulo da caixa (NUNCA credenciais)
+  remetente     String
+  remetenteNome String?
+  destinatario  String?
+  assunto       String?
+  recebidoEm    DateTime
+  categoria     String    @default("DESCONHECIDO")
+  confianca     Float     @default(0)
+  status        String    @default("RECEBIDO") // RECEBIDO | PROCESSADO | REVISAO_HUMANA | ERRO
+  erro          String?
+  origemHandle  String? // identificador opaco na caixa (ex.: UID IMAP)
+  criadoEm      DateTime  @default(now())
+  processadoEm  DateTime?
+
+  arquivos   DocumentoArquivo[]
+  documentos NfeDocument[]
+
+  @@index([status])
+  @@index([categoria])
+}
+
+model DocumentoArquivo {
+  id             String   @id @default(cuid())
+  emailId        String?
+  origem         String // EMAIL | UPLOAD
+  nomeOriginal   String
+  mimeType       String
+  tamanhoBytes   Int
+  sha256         String   @unique // duplicidade de anexo/arquivo
+  caminho        String // relativo a NFE_STORAGE_DIR; arquivo ORIGINAL preservado
+  tipoDetectado  String // XML_NFE | PDF_TEXTO | PDF_ESCANEADO | IMAGEM | OUTRO
+  status         String   @default("RECEBIDO") // RECEBIDO | INTERPRETADO | SEM_DADOS | FALHA
+  metodoExtracao String? // XML | PDF_TEXTO | OCR
+  erro           String?
+  usuarioId      String?
+  criadoEm       DateTime @default(now())
+
+  email      EmailMensagem? @relation(fields: [emailId], references: [id])
+  documentos NfeDocument[]
+
+  @@index([emailId])
+  @@index([status])
+}
+
+model NfeDocument {
+  id                     String    @id @default(cuid())
+  arquivoId              String?
+  emailId                String?
+  chaveAcesso            String?   @unique
+  chaveValida            Boolean   @default(false) // 44 digitos + DV modulo 11 + coerencia
+  modelo                 String?
+  serie                  String?
+  numero                 String?
+  naturezaOperacao       String?
+  dataEmissao            DateTime?
+  emitenteCnpj           String?
+  emitenteNome           String?
+  emitenteFantasia       String?
+  emitenteIe             String?
+  emitenteCrt            String?
+  emitenteUf             String?
+  destinatarioCnpj       String?
+  destinatarioNome       String?
+  fornecedorId           String?
+  valorProdutosCentavos  Int       @default(0)
+  valorFreteCentavos     Int       @default(0)
+  valorSeguroCentavos    Int       @default(0)
+  valorDescontoCentavos  Int       @default(0)
+  valorOutrasCentavos    Int       @default(0)
+  valorIcmsCentavos      Int       @default(0)
+  valorIcmsStCentavos    Int       @default(0)
+  valorIpiCentavos       Int       @default(0)
+  valorPisCentavos       Int       @default(0)
+  valorCofinsCentavos    Int       @default(0)
+  valorTotalCentavos     Int       @default(0)
+  pagamentoJson          String? // formas de pagamento + duplicatas (vencimentos)
+  protocoloAutorizacao   String? // nProt do protNFe (NAO e validacao SEFAZ)
+  fonteDados             String // XML | PDF_TEXTO | OCR
+  origemCamposJson       String? // campo -> fonte/trecho de onde veio
+  confianca              Float     @default(0)
+  // Etapas separadas
+  statusDocumento        String    @default("INTERPRETADO") // INTERPRETADO | FALHA_INTERPRETACAO
+  statusConferencia      String    @default("PENDENTE") // PENDENTE | EM_REVISAO | CONFERIDA | REJEITADA
+  statusCompra           String    @default("NAO_PREPARADA") // NAO_PREPARADA | PREPARADA | APROVADA
+  statusEstoque          String    @default("NAO_APLICADO") // NAO_APLICADO | APLICADO | FALHA
+  compraId               String? // Compra criada na aprovacao (sem efeito em estoque/custo)
+  aprovadoPorId          String?
+  aprovadoEm             DateTime?
+  rejeitadoPorId         String?
+  rejeitadoEm            DateTime?
+  recebimentoFisicoPorId String?
+  recebimentoFisicoEm    DateTime?
+  estoqueAtualizadoEm    DateTime?
+  criadoEm               DateTime  @default(now())
+  atualizadoEm           DateTime  @updatedAt
+
+  arquivo    DocumentoArquivo? @relation(fields: [arquivoId], references: [id])
+  email      EmailMensagem?    @relation(fields: [emailId], references: [id])
+  fornecedor Fornecedor?       @relation(fields: [fornecedorId], references: [id])
+  itens      NfeItem[]
+
+  @@unique([emitenteCnpj, modelo, serie, numero])
+  @@index([statusConferencia])
+  @@index([statusCompra])
+  @@index([fornecedorId])
+}
+
+model NfeItem {
+  id                    String   @id @default(cuid())
+  documentoId           String
+  numeroItem            Int
+  codigoFornecedor      String? // cProd (texto: preserva zeros a esquerda)
+  gtin                  String? // cEAN (nulo para SEM GTIN)
+  descricao             String?
+  ncm                   String?
+  cest                  String?
+  cfop                  String?
+  origemMercadoria      String? // orig
+  cst                   String? // CST (regime normal)
+  csosn                 String? // CSOSN (Simples Nacional)
+  unidade               String? // uCom
+  unidadeTributavel     String? // uTrib
+  quantidadeOriginal    String // qCom exatamente como veio
+  quantidade            Float
+  valorUnitarioOriginal String // vUnCom exatamente como veio (ate 10 casas)
+  valorUnitarioCentavos Int // arredondado (informativo; o total fiscal e valorTotalCentavos)
+  valorTotalCentavos    Int // vProd
+  freteCentavos         Int      @default(0)
+  seguroCentavos        Int      @default(0)
+  descontoCentavos      Int      @default(0)
+  outrasCentavos        Int      @default(0)
+  icmsCentavos          Int      @default(0)
+  icmsStCentavos        Int      @default(0)
+  ipiCentavos           Int      @default(0)
+  pisCentavos           Int      @default(0)
+  cofinsCentavos        Int      @default(0)
+  impostosJson          String? // nos de imposto ORIGINAIS (preservados)
+  origemDados           String // XML | PDF_TEXTO | OCR
+  produtoId             String?
+  statusVinculo         String   @default("SEM_CORRESPONDENCIA") // MAPEADO | SUGERIDO | CONFIRMADO | SEM_CORRESPONDENCIA | DISPENSADO
+  vinculoOrigem         String? // MAPA_FORNECEDOR | GTIN | HUMANO
+  vinculoPorId          String?
+  quantidadeRecebida    Float?
+  movimentacaoEstoqueId String?  @unique // idempotencia da entrada em estoque
+  criadoEm              DateTime @default(now())
+
+  documento NfeDocument @relation(fields: [documentoId], references: [id])
+  produto   Produto?    @relation(fields: [produtoId], references: [id])
+
+  @@unique([documentoId, numeroItem])
+  @@index([produtoId])
+}
+
+// Mapa codigo-do-fornecedor -> produto interno. UNICO sinal automatico confiavel.
+// So e criado por decisao HUMANA (nunca por fuzzy/IA).
+model ProdutoFornecedorMap {
+  id               String   @id @default(cuid())
+  fornecedorId     String
+  codigoFornecedor String
+  produtoId        String
+  criadoPorId      String?
+  criadoEm         DateTime @default(now())
+
+  fornecedor Fornecedor @relation(fields: [fornecedorId], references: [id])
+  produto    Produto    @relation(fields: [produtoId], references: [id])
+
+  @@unique([fornecedorId, codigoFornecedor])
+  @@index([produtoId])
+}
+
+model ReviewQueueItem {
+  id             String    @id @default(cuid())
+  documentoId    String?
+  entidadeTipo   String // EMAIL | ARQUIVO | NFE | NFE_ITEM
+  entidadeId     String
+  motivo         String
+  ref            String    @default("") // diferencia varios itens do mesmo motivo (idempotencia)
+  severidade     String    @default("BLOQUEANTE") // BLOQUEANTE | ALERTA
+  detalhe        String?
+  dadosJson      String?
+  status         String    @default("ABERTO") // ABERTO | RESOLVIDO | DISPENSADO
+  resolucao      String?
+  resolvidoPorId String?
+  resolvidoEm    DateTime?
+  criadoEm       DateTime  @default(now())
+
+  @@unique([entidadeTipo, entidadeId, motivo, ref])
+  @@index([status])
+  @@index([documentoId])
+}
+
+model ProcessingLog {
+  id            String   @id @default(cuid())
+  correlationId String
+  entidadeTipo  String
+  entidadeId    String?
+  acao          String
+  status        String // OK | WARN | ERROR
+  mensagem      String?
+  detalheJson   String?
+  usuarioId     String?
+  criadoEm      DateTime @default(now())
+
+  @@index([entidadeTipo, entidadeId])
+  @@index([correlationId])
 }
