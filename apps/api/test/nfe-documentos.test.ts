@@ -14,7 +14,7 @@ import { criarMotorTesseract, type MotorOcr } from '../src/modules/documentos/oc
 import type { DepsDocumentos } from '../src/modules/documentos/pipeline.js';
 import { auth, criarFornecedor, criarProduto, criarUsuarios, limparBancoNfe, login, upload } from './helpers/app-helpers.js';
 import { CNPJ_FORNECEDOR, CNPJ_LOJA, montarChave, montarXmlNfe } from './helpers/nfe-fixtures.js';
-import { imagemComTexto, linhasDanfe, pdfComTexto, pdfSoImagem } from './helpers/pdf-fixtures.js';
+import { fontesDeSistemaDisponiveis, imagemComTexto, linhasDanfe, pdfComTexto, pdfSoImagem } from './helpers/pdf-fixtures.js';
 
 let gerente: string;
 let appBase: FastifyInstance;
@@ -232,8 +232,9 @@ test('multimodal desligado por padrao; quando ligado, a saida e SUGESTAO marcada
 const langPath = process.env.NFE_OCR_LANG_PATH ? path.resolve(process.env.NFE_OCR_LANG_PATH) : null;
 const idioma = process.env.NFE_OCR_LANG || 'por';
 const temIdioma = !!langPath && existsSync(path.join(langPath, `${idioma}.traineddata`));
+const temFontes = fontesDeSistemaDisponiveis(); // o canvas sintetico precisa de fonte de sistema (ex.: imagem Linux slim nao tem)
 
-test('OCR REAL (tesseract.js offline) sobre imagem e PDF escaneado sinteticos', { skip: temIdioma ? false : 'defina NFE_OCR_LANG_PATH com o idioma local (ver docs) — nenhum download automatico' }, async () => {
+test('OCR REAL (tesseract.js offline) sobre imagem e PDF escaneado sinteticos', { skip: !temIdioma ? 'defina NFE_OCR_LANG_PATH com o idioma local (ver docs) — nenhum download automatico' : !temFontes ? 'ambiente sem fontes de sistema: a imagem sintetica sairia em branco (instale ex.: fonts-dejavu-core)' : false }, async () => {
   const motor = criarMotorTesseract({ langPath: langPath!, lang: idioma });
   try {
     const linhas = ['DANFE NOTA FISCAL', 'EMISSAO 20/10/2026', 'VALOR TOTAL DA NOTA 125,00', 'CNPJ 11.222.333/0001-81'];

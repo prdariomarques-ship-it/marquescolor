@@ -80,3 +80,17 @@ export function linhasDanfe(o: { chave: string; numero: number; serie: number; i
     `VALOR TOTAL DA NOTA ${o.totalNota}`,
   ];
 }
+
+/** true se o ambiente tem alguma fonte de sistema (sem fontes, o canvas desenha texto em branco e o OCR real nao tem o que ler). */
+export function fontesDeSistemaDisponiveis(): boolean {
+  const c = createCanvas(80, 40);
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 80, 40);
+  ctx.fillStyle = '#000000';
+  ctx.font = '30px sans-serif';
+  ctx.fillText('AB', 5, 32);
+  const px = ctx.getImageData(0, 0, 80, 40).data;
+  for (let i = 0; i < px.length; i += 4) if (px[i] < 128) return true;
+  return false;
+}
