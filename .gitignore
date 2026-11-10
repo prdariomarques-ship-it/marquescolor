@@ -9,3 +9,4 @@ backups/
 .env
 apps/api/prisma/.test-db/
 nfe-storage/
+apps/api/ocr-data/

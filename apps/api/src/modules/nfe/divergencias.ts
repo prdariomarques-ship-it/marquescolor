@@ -57,7 +57,7 @@ export function calcularRevisoes(doc: DocParaRevisao, itens: ItemParaRevisao[], 
 
   if (doc.fonteDados !== 'XML') {
     nfe('FONTE_NAO_XML', 'BLOQUEANTE',
-      `Dados lidos de ${doc.fonteDados === 'OCR' ? 'OCR' : 'texto de PDF'}, nao de XML. Conferir cada campo contra o documento original ou importar o XML da nota.`);
+      `Dados lidos de ${({ OCR: 'OCR', PDF_TEXTO: 'texto de PDF', MULTIMODAL: 'interpretacao multimodal (sugestao)' } as Record<string, string>)[doc.fonteDados] ?? doc.fonteDados}, nao de XML. Conferir cada campo contra o documento original ou importar o XML da nota.`);
   }
   if (doc.chaveAcesso && !doc.chaveValida) {
     nfe('CHAVE_INVALIDA', 'BLOQUEANTE', 'Chave de acesso com formato, digito verificador ou dados incoerentes com os campos da nota.', { chave: doc.chaveAcesso });

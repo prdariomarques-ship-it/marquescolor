@@ -533,7 +533,7 @@ model NfeDocument {
   valorTotalCentavos     Int       @default(0)
   pagamentoJson          String? // formas de pagamento + duplicatas (vencimentos)
   protocoloAutorizacao   String? // nProt do protNFe (NAO e validacao SEFAZ)
-  fonteDados             String // XML | PDF_TEXTO | OCR
+  fonteDados             String // XML | PDF_TEXTO | OCR | MULTIMODAL
   origemCamposJson       String? // campo -> fonte/trecho de onde veio
   confianca              Float     @default(0)
   // Etapas separadas
