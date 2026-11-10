@@ -1,6 +1,6 @@
 # Integração NF-e / inteligência documental — Fase 5
 
-Branch: `feat/nfe-ingestion-typescript` (local; **nada publicado**). Stack: Node.js + Fastify 4 + TypeScript + Prisma 5 + SQLite + React/Vite. Documentos relacionados: [`nfe-api.md`](nfe-api.md) · [`nfe-pricing-contract.md`](nfe-pricing-contract.md) · [`nfe-ocr-report.md`](nfe-ocr-report.md) · [`nfe-migration.sql`](nfe-migration.sql).
+Branch: `feat/nfe-ingestion-typescript` (**publicada no GitHub em 2026-11-10**, `origin/feat/nfe-ingestion-typescript`; PR em **Draft** com base `feat/metas-exportacao-backup-operacional`; **não mesclada** em nenhuma branch, `main` intocada, nenhum deploy feito). Stack: Node.js + Fastify 4 + TypeScript + Prisma 5 + SQLite + React/Vite. Documentos relacionados: [`nfe-api.md`](nfe-api.md) · [`nfe-pricing-contract.md`](nfe-pricing-contract.md) · [`nfe-ocr-report.md`](nfe-ocr-report.md) · [`nfe-migration.sql`](nfe-migration.sql).
 
 ## 1. Base e escopo
 
@@ -148,3 +148,19 @@ Cuidado: as tabelas novas usam `ON DELETE RESTRICT` de `ProdutoFornecedorMap` �
 **Resultado de uma única execução integrada (2026-11-10):** `91 testes — 91 pass, 0 fail` com os dados locais de OCR (`apps/api/ocr-data`); `91 testes — 90 pass, 0 fail, 1 skipped` sem eles (modo CI: o teste de OCR real fica *skipped*). Builds: `npm run build` (API `tsc` + web `vite build`) OK. Baseline antes da Fase 5 na mesma base: 38/38. As contagens **não** somam suítes isoladas.
 
 Como rodar: `npm test -w apps/api` (usa `scripts/run-tests.mjs`: cria `apps/api/prisma/.test-db/test-*.db`, aplica o schema só nele, **não lê o `.env` da loja** e imprime o caminho do banco antes de começar).
+
+## 13. Status do PR e pendências para sair de Draft
+
+**PR:** *Draft*, origem `feat/nfe-ingestion-typescript`, base `feat/metas-exportacao-backup-operacional` (B17, PR #1). O diff contra essa base contém **8 commits** (`31855e8`, `ebddbc5`, `1c0ad17`, `69db00f`, `ab7caf7`, `ba5703b`, `e11bac4` e este de documentação) — 53 arquivos, sem contar o `package-lock.json`. Não deve ser marcado como pronto para integração enquanto houver pendência abaixo. **Não** mesclar, **não** fazer deploy, **não** tocar na `main`.
+
+**Pendências bloqueantes para "pronto para integração":**
+
+1. **Contrato com o motor de preços NÃO validado.** `nfe-pricing-contract.md` foi escrito só a partir do que a Fase 5 produz. O código real do motor (GLM: `motor-precos.ts`, `390252a`, `c73a88f`) **não esteve acessível** nesta máquina e **nenhum teste de integração com ele existe**. Tratar o contrato como *proposta* até o GLM revisá-lo e confirmar o formato real.
+2. **Node.js × `pdfjs-dist` e CVE-2026-16633.** `pdfjs-dist@5.6.205` aparece como **alto** no `npm audit` (CVE-2026-16633 / GHSA-hq66-cqwq-w95j; afeta o *viewer* com `enableScripting` e sem CSP; este módulo usa só a API headless). A versão corrigida (`≥ 6.2.108`) exige **Node ≥ 22.13**, enquanto o projeto declara `>=20.6` e o CI usa **Node 20**; a 5.6.205 exige Node ≥ 20.19. **Decisão pendente:** subir Node/CI e atualizar o pdfjs (recomendado) ou aceitar formalmente o risco residual. Ainda não verificado se o `pdfjs-dist` 6.x funciona com `@napi-rs/canvas` 0.1.100 (a combinação com canvas 1.1.0 + pdfjs 5.6.205 derrubava o processo).
+3. **Testes que ainda faltam (não executados):**
+   - **Outlook real:** recebimento real de e-mail (IMAP com OAuth2/XOAUTH2 ou Microsoft Graph) com autorização do dono da conta e credenciais válidas. Hoje só há `.eml` sintéticos e fontes simuladas; Microsoft Graph não foi implementado.
+   - **Documentos fiscais reais:** XML/DANFE/PDF/foto reais (anonimizados), incluindo acurácia do OCR em volume. Hoje só fixtures sintéticas.
+   - **Consulta à SEFAZ:** situação real da nota (autorizada/cancelada/denegada) e assinatura digital **não são validadas**; a detecção de cancelamento só ocorre se o XML de evento chegar.
+   - Inspeção visual / teste em navegador da tela *Documentos fiscais* (só compilação foi verificada).
+4. **Parâmetros do contador** (§9) e decisão sobre o risco de custo automático em `/compras/:id/confirmar` e `POST /compras` (código preexistente).
+5. Vulnerabilidades preexistentes no baseline (`fast-jwt` crítico via `@fastify/jwt`, `fastify`, `zod`, `react-router`), a tratar em PR separado.
