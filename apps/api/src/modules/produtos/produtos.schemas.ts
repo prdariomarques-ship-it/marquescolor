@@ -21,6 +21,12 @@ export const criarProdutoSchema = z.object({
   localizacao: z.string().max(100).optional().nullable(),
   fornecedorPrincipalId: z.string().optional().nullable(),
   fotoUrl: z.string().url().optional().nullable(),
+  ncm: z.string().trim().max(8).optional().nullable(),
+  cest: z.string().trim().max(7).optional().nullable(),
+  cfop: z.string().trim().max(4).optional().nullable(),
+  cstCsosn: z.string().trim().max(4).optional().nullable(),
+  origem: z.coerce.number().int().min(0).max(8).optional().default(0),
+  unidadeTributavel: z.string().trim().max(6).optional().nullable(),
   ativo: z.boolean().optional().default(true),
 }).refine(d => d.precoVendaCentavos >= d.precoCustoCentavos || d.precoVendaCentavos === 0, {
   message: 'Preco de venda deve ser >= preco de custo (ou zero)',
@@ -46,6 +52,12 @@ export const atualizarProdutoSchema = z.object({
   localizacao: z.string().max(100).optional().nullable(),
   fornecedorPrincipalId: z.string().optional().nullable(),
   fotoUrl: z.string().url().optional().nullable(),
+  ncm: z.string().trim().max(8).optional().nullable(),
+  cest: z.string().trim().max(7).optional().nullable(),
+  cfop: z.string().trim().max(4).optional().nullable(),
+  cstCsosn: z.string().trim().max(4).optional().nullable(),
+  origem: z.coerce.number().int().min(0).max(8).optional().nullable(),
+  unidadeTributavel: z.string().trim().max(6).optional().nullable(),
   ativo: z.boolean().optional(),
 });
 
@@ -67,6 +79,12 @@ export const produtoCsvRowSchema = z.object({
   estoqueMinimo: z.coerce.number().min(0).optional().default(0),
   estoqueMaximo: z.coerce.number().min(0).optional().default(0),
   localizacao: z.string().optional(),
+  ncm: z.string().optional(),
+  cest: z.string().optional(),
+  cfop: z.string().optional(),
+  cstCsosn: z.string().optional(),
+  origem: z.coerce.number().int().optional().default(0),
+  unidadeTributavel: z.string().optional(),
 });
 
 export type CriarProdutoInput = z.infer<typeof criarProdutoSchema>;

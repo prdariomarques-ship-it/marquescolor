@@ -21,9 +21,12 @@ import { orcamentosRoutes } from './modules/orcamentos/orcamentos.routes.js';
 import { financeiroRoutes } from './modules/financeiro/financeiro.routes.js';
 import { relatoriosRoutes } from './modules/relatorios/relatorios.routes.js';
 import { backupRoutes } from './modules/backup/backup.routes.js';
+import { nfeRoutes, type NfeModuloOpcoes } from './modules/nfe/nfe.routes.js';
 
 export interface BuildAppOptions {
   logger?: boolean;
+  /** injecao de dependencias do modulo NF-e (testes: estoque falho, OCR/e-mail simulados) */
+  nfe?: NfeModuloOpcoes;
 }
 
 /**
@@ -62,6 +65,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<FastifyIn
   await app.register(financeiroRoutes, { prefix: '/api' });
   await app.register(relatoriosRoutes, { prefix: '/api' });
   await app.register(backupRoutes, { prefix: '/api' });
+  await app.register(nfeRoutes, { prefix: '/api', ...(options.nfe ?? {}) });
 
   return app;
 }
