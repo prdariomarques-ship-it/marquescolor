@@ -7,3 +7,5 @@ apps/api/prisma/dev.db-journal
 backups/
 *.tsbuildinfo
 .env
+apps/api/prisma/.test-db/
+nfe-storage/
