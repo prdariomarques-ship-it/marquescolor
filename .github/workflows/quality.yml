@@ -1,0 +1,46 @@
+name: Quality Gate
+
+on:
+  push:
+    branches:
+      - main
+      - feat/metas-exportacao-backup-operacional
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Configure isolated test environment
+        run: |
+          printf '%s\n' \
+            'DATABASE_URL="file:./test.db"' \
+            'PORT=3333' \
+            'JWT_SECRET="github-actions-only-secret-not-used-in-production-123456789"' \
+            'JWT_ACCESS_EXPIRES="15m"' \
+            'JWT_REFRESH_EXPIRES="7d"' \
+            'LOJA_NOME="Marquescollor Tintas"' > .env
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build API and web
+        run: npm run build
+
+      - name: Run API tests
+        run: npm run test

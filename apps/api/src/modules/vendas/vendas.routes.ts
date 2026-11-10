@@ -7,15 +7,23 @@ import { finalizarVendaSchema, cancelarVendaSchema } from './vendas.schemas.js';
 export const vendasRoutes: FastifyPluginAsync = async (app) => {
   // Listar vendas
   app.get('/vendas', { preHandler: authenticate }, async (req, reply) => {
-    const q = req.query as { busca?: string; status?: string; dataInicio?: string; dataFim?: string; page?: string; pageSize?: string };
+    const q = req.query as { busca?: string; status?: string; dataInicio?: string; dataFim?: string; operadorId?: string; formaPagamento?: string; page?: string; pageSize?: string };
     const page = Math.max(1, parseInt(q.page || '1', 10));
     const pageSize = Math.min(200, Math.max(1, parseInt(q.pageSize || '50', 10)));
     const where: any = {};
     if (q.status) where.status = q.status;
+    if (q.operadorId) where.usuarioId = q.operadorId;
+    if (q.formaPagamento) where.pagamentos = { some: { forma: q.formaPagamento } };
     if (q.dataInicio || q.dataFim) {
       where.criadoEm = {};
-      if (q.dataInicio) where.criadoEm.gte = new Date(q.dataInicio);
-      if (q.dataFim) where.criadoEm.lte = new Date(q.dataFim);
+      if (q.dataInicio) {
+        const inicio = new Date(`${q.dataInicio}T00:00:00`);
+        if (!Number.isNaN(inicio.getTime())) where.criadoEm.gte = inicio;
+      }
+      if (q.dataFim) {
+        const fim = new Date(`${q.dataFim}T23:59:59.999`);
+        if (!Number.isNaN(fim.getTime())) where.criadoEm.lte = fim;
+      }
     }
     const [total, vendas] = await Promise.all([
       prisma.venda.count({ where }),
@@ -32,6 +40,72 @@ export const vendasRoutes: FastifyPluginAsync = async (app) => {
       }),
     ]);
     return reply.send({ data: vendas, page, pageSize, total, totalPages: Math.ceil(total / pageSize) });
+  });
+
+  // Operadores com vendas registradas, para filtro do historico.
+  app.get('/vendas/operadores', { preHandler: authenticate }, async (_req, reply) => {
+    const ids = await prisma.venda.findMany({
+      distinct: ['usuarioId'],
+      select: { usuarioId: true },
+    });
+    if (!ids.length) return reply.send([]);
+    const operadores = await prisma.usuario.findMany({
+      where: { id: { in: ids.map(item => item.usuarioId) }, ativo: true },
+      select: { id: true, nome: true },
+      orderBy: { nome: 'asc' },
+    });
+    return reply.send(operadores);
+  });
+
+  // Exportacao integral dos registros filtrados, sem limite de paginacao.
+  app.get('/vendas/exportar', { preHandler: authenticate }, async (req, reply) => {
+    const q = req.query as { status?: string; dataInicio?: string; dataFim?: string; operadorId?: string; formaPagamento?: string };
+    const where: any = {};
+    if (q.status) where.status = q.status;
+    if (q.operadorId) where.usuarioId = q.operadorId;
+    if (q.formaPagamento) where.pagamentos = { some: { forma: q.formaPagamento } };
+    if (q.dataInicio || q.dataFim) {
+      where.criadoEm = {};
+      if (q.dataInicio) {
+        const inicio = new Date(q.dataInicio);
+        if (!Number.isNaN(inicio.getTime())) where.criadoEm.gte = inicio;
+      }
+      if (q.dataFim) {
+        const fim = new Date(q.dataFim);
+        if (!Number.isNaN(fim.getTime())) {
+          fim.setHours(23, 59, 59, 999);
+          where.criadoEm.lte = fim;
+        }
+      }
+    }
+    const vendas = await prisma.venda.findMany({
+      where,
+      include: {
+        cliente: { select: { nome: true, cpfCnpj: true } },
+        itens: true,
+        pagamentos: true,
+      },
+      orderBy: { criadoEm: 'asc' },
+      take: 20001,
+    });
+    const limiteAplicado = vendas.length > 20000;
+    const vendasExportadas = vendas.slice(0, 20000);
+    const operadores = await prisma.usuario.findMany({
+      where: { id: { in: [...new Set(vendasExportadas.map(v => v.usuarioId))] } },
+      select: { id: true, nome: true },
+    });
+    const nomes = new Map(operadores.map(op => [op.id, op.nome]));
+    return reply.send({
+      exportadoEm: new Date().toISOString(),
+      totalRegistros: vendasExportadas.length,
+      limiteAplicado,
+      vendas: vendasExportadas.map(v => ({
+        ...v,
+        operadorNome: nomes.get(v.usuarioId) || 'Operador desativado',
+        clienteNome: v.cliente?.nome || 'Anonima',
+        clienteDocumento: v.cliente?.cpfCnpj || '',
+      })),
+    });
   });
 
   // Buscar por id

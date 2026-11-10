@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { api } from '../../lib/api';
 import { useAuth } from '../../stores/auth';
 import { formatarCentavos, formatarDataHora } from '../../lib/format';
-import { Loader2, Search, Eye, Ban, Printer } from 'lucide-react';
+import { Loader2, Eye, Ban, FileSpreadsheet, FileDown, Filter } from 'lucide-react';
+import { gerarArquivoXlsx } from '../../lib/contabilExport';
 import { CupomNaoFiscal } from '../cupom/CupomNaoFiscal';
 
 const STATUS_COR: Record<string, string> = {
@@ -19,6 +20,13 @@ export default function Vendas() {
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState('');
   const [filtroStatus, setFiltroStatus] = useState('');
+  const [dataInicio, setDataInicio] = useState('');
+  const [dataFim, setDataFim] = useState('');
+  const [operadorId, setOperadorId] = useState('');
+  const [formaPagamento, setFormaPagamento] = useState('');
+  const [periodo, setPeriodo] = useState('');
+  const [operadores, setOperadores] = useState<Array<{ id: string; nome: string }>>([]);
+  const [exportando, setExportando] = useState(false);
   const [detalhe, setDetalhe] = useState<any | null>(null);
   const [modalCancelar, setModalCancelar] = useState<string | null>(null);
   const [motivoCancelamento, setMotivoCancelamento] = useState('');
@@ -27,6 +35,7 @@ export default function Vendas() {
 
   useEffect(() => {
     api.configuracoes.get().then(setConfig).catch(() => {});
+    api.vendas.operadores().then(setOperadores).catch(() => {});
   }, []);
 
   async function verDetalhe(v: any) {
@@ -41,6 +50,10 @@ export default function Vendas() {
     try {
       const params: any = { page, pageSize: 50 };
       if (filtroStatus) params.status = filtroStatus;
+      if (dataInicio) params.dataInicio = dataInicio;
+      if (dataFim) params.dataFim = dataFim;
+      if (operadorId) params.operadorId = operadorId;
+      if (formaPagamento) params.formaPagamento = formaPagamento;
       const res = await api.vendas.list(params);
       setVendas(res.data);
       setTotal(res.total);
@@ -48,7 +61,137 @@ export default function Vendas() {
     finally { setCarregando(false); }
   }
 
-  useEffect(() => { carregar(); }, [filtroStatus, page]);
+  useEffect(() => { carregar(); }, [filtroStatus, dataInicio, dataFim, operadorId, formaPagamento, page]);
+
+  function aplicarPeriodo(valor: string) {
+    setPeriodo(valor);
+    const hoje = new Date();
+    const montar = (data: Date) => {
+      const ano = data.getFullYear();
+      const mes = String(data.getMonth() + 1).padStart(2, '0');
+      const dia = String(data.getDate()).padStart(2, '0');
+      return `${ano}-${mes}-${dia}`;
+    };
+    if (valor === 'hoje') {
+      setDataInicio(montar(hoje)); setDataFim(montar(hoje));
+    } else if (valor === 'ontem') {
+      const ontem = new Date(hoje); ontem.setDate(ontem.getDate() - 1);
+      setDataInicio(montar(ontem)); setDataFim(montar(ontem));
+    } else if (valor === '7dias') {
+      const inicio = new Date(hoje); inicio.setDate(inicio.getDate() - 6);
+      setDataInicio(montar(inicio)); setDataFim(montar(hoje));
+    } else if (valor === '30dias') {
+      const inicio = new Date(hoje); inicio.setDate(inicio.getDate() - 29);
+      setDataInicio(montar(inicio)); setDataFim(montar(hoje));
+    } else if (valor === 'todos') {
+      setDataInicio(''); setDataFim('');
+    }
+    setPage(1);
+  }
+
+  function parametrosExportacao() {
+    const params: any = {};
+    if (filtroStatus) params.status = filtroStatus;
+    if (dataInicio) params.dataInicio = dataInicio;
+    if (dataFim) params.dataFim = dataFim;
+    if (operadorId) params.operadorId = operadorId;
+    if (formaPagamento) params.formaPagamento = formaPagamento;
+    return params;
+  }
+
+  async function exportar(formato: 'csv' | 'xlsx') {
+    setExportando(true);
+    try {
+      const resultado = await api.vendas.exportar(parametrosExportacao());
+      const registros = resultado.vendas || [];
+      if (!registros.length) {
+        alert('Não há vendas para exportar com os filtros atuais.');
+        return;
+      }
+      if (resultado.limiteAplicado) {
+        alert('A exportação atingiu o limite de 20.000 vendas. Restrinja o período para exportar o restante.');
+      }
+      const dataArquivo = new Date().toISOString().slice(0, 10);
+      const nome = `marquescolor-vendas-${dataInicio || 'inicio'}-${dataFim || dataArquivo}`;
+      const dinheiro = (centavos: number) => Number((Number(centavos || 0) / 100).toFixed(2));
+      const vendasRows = [
+        ['Número', 'Data e hora', 'Status', 'Cliente', 'Documento', 'Operador', 'Subtotal (R$)', 'Desconto (R$)', 'Acréscimo (R$)', 'Total (R$)', 'Formas de pagamento'],
+        ...registros.map((v: any) => [
+          v.numero, new Date(v.criadoEm).toLocaleString('pt-BR'), v.status,
+          v.clienteNome || v.cliente?.nome || 'Anônima', v.clienteDocumento || v.cliente?.cpfCnpj || '',
+          v.operadorNome || v.usuarioId, dinheiro(v.subtotalCentavos), dinheiro(v.descontoCentavos),
+          dinheiro(v.acrescimoCentavos), dinheiro(v.totalCentavos),
+          (v.pagamentos || []).map((p: any) => `${p.forma}: ${(dinheiro(p.valorCentavos)).toFixed(2)}`).join(' | '),
+        ]),
+      ];
+      const itens = registros.flatMap((v: any) => (v.itens || []).map((item: any) => ({
+        venda: v.numero, data: new Date(v.criadoEm).toLocaleString('pt-BR'), status: v.status,
+        codigo: item.codigoSnapshot, produto: item.nomeProdutoSnapshot, quantidade: item.quantidade,
+        preco: dinheiro(item.precoUnitarioCentavos), desconto: dinheiro(item.descontoItemCentavos),
+        subtotal: dinheiro(item.subtotalCentavos),
+      })));
+      const itensRows = [
+        ['Venda', 'Data e hora', 'Status', 'Código', 'Produto', 'Quantidade', 'Preço unitário (R$)', 'Desconto do item (R$)', 'Subtotal (R$)'],
+        ...itens.map((i: any) => [i.venda, i.data, i.status, i.codigo, i.produto, i.quantidade, i.preco, i.desconto, i.subtotal]),
+      ];
+      const conciliacao = new Map<string, { quantidade: number; valor: number }>();
+      registros.filter((v: any) => v.status === 'FINALIZADA').forEach((v: any) => {
+        (v.pagamentos || []).forEach((p: any) => {
+          const atual = conciliacao.get(p.forma) || { quantidade: 0, valor: 0 };
+          atual.quantidade += 1;
+          atual.valor += Number(p.valorCentavos || 0);
+          conciliacao.set(p.forma, atual);
+        });
+      });
+      const resumoRows = [
+        ['Forma de pagamento', 'Quantidade de lançamentos', 'Total recebido (R$)'],
+        ...Array.from(conciliacao.entries()).map(([forma, item]) => [forma, item.quantidade, dinheiro(item.valor)]),
+        ['TOTAL', Array.from(conciliacao.values()).reduce((t, item) => t + item.quantidade, 0), dinheiro(Array.from(conciliacao.values()).reduce((t, item) => t + item.valor, 0))],
+      ];
+      if (formato === 'xlsx') {
+        const blob = gerarArquivoXlsx([
+          { name: '1_Vendas_Periodo', rows: vendasRows },
+          { name: '2_Itens_Detalhados', rows: itensRows },
+          { name: '3_Conciliacao', rows: resumoRows },
+        ]);
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `${nome}.xlsx`; a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const escapar = (valor: any) => {
+          let texto = String(valor ?? '');
+          if (typeof valor === 'string' && /^[=+@-]/.test(texto)) texto = `'${texto}`;
+          return `"${texto.replace(/"/g, '""')}"`;
+        };
+        const csvRows = [
+          ['Venda', 'Data e hora', 'Status', 'Cliente', 'Documento', 'Operador', 'Forma(s) de pagamento', 'Código', 'Produto', 'Quantidade', 'Preço unitário (R$)', 'Desconto item (R$)', 'Subtotal item (R$)', 'Subtotal venda (R$)', 'Desconto venda (R$)', 'Acréscimo (R$)', 'Total venda (R$)'],
+          ...registros.flatMap((v: any) => {
+            const linhas = (v.itens?.length ? v.itens : [null]).map((item: any) => [
+              v.numero, new Date(v.criadoEm).toLocaleString('pt-BR'), v.status, v.clienteNome || 'Anônima',
+              v.clienteDocumento || '', v.operadorNome || v.usuarioId,
+              (v.pagamentos || []).map((p: any) => `${p.forma}: ${dinheiro(p.valorCentavos).toFixed(2)}`).join(' | '),
+              item?.codigoSnapshot || '', item?.nomeProdutoSnapshot || '', item?.quantidade ?? '',
+              item ? dinheiro(item.precoUnitarioCentavos).toFixed(2) : '',
+              item ? dinheiro(item.descontoItemCentavos).toFixed(2) : '',
+              item ? dinheiro(item.subtotalCentavos).toFixed(2) : '',
+              dinheiro(v.subtotalCentavos).toFixed(2), dinheiro(v.descontoCentavos).toFixed(2),
+              dinheiro(v.acrescimoCentavos).toFixed(2), dinheiro(v.totalCentavos).toFixed(2),
+            ]);
+            return linhas;
+          }),
+        ];
+        const csv = '\uFEFF' + csvRows.map(row => row.map(escapar).join(';')).join('\r\n');
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = `${nome}.csv`; a.click();
+        URL.revokeObjectURL(url);
+      }
+    } catch (e: any) {
+      alert(e.message || 'Não foi possível exportar as vendas.');
+    } finally {
+      setExportando(false);
+    }
+  }
 
   async function handleCancelar(id: string) {
     if (!motivoCancelamento || motivoCancelamento.length < 3) { alert('Motivo deve ter pelo menos 3 caracteres'); return; }
@@ -68,13 +211,43 @@ export default function Vendas() {
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Vendas</h1>
       <p className="text-sm text-gray-500 mb-6">{total} venda(s)</p>
 
-      <div className="flex gap-2 mb-4">
-        <select value={filtroStatus} onChange={e => { setFiltroStatus(e.target.value); setPage(1); }} className="input max-w-xs">
-          <option value="">Todos os status</option>
-          <option value="FINALIZADA">Finalizadas</option>
-          <option value="CANCELADA">Canceladas</option>
-          <option value="RASCUNHO">Rascunho</option>
-        </select>
+      <div className="bg-white rounded-lg shadow p-4 mb-4">
+        <div className="flex items-center gap-2 font-semibold text-slate-800 mb-3"><Filter className="w-4 h-4" /> Filtros e exportação contábil</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+          <select value={periodo} onChange={e => aplicarPeriodo(e.target.value)} className="input">
+            <option value="">Escolher período</option>
+            <option value="hoje">Hoje</option><option value="ontem">Ontem</option>
+            <option value="7dias">Últimos 7 dias</option><option value="30dias">Últimos 30 dias</option>
+            <option value="todos">Todo o período</option>
+          </select>
+          <input type="date" value={dataInicio} onChange={e => { setDataInicio(e.target.value); setPeriodo('personalizado'); setPage(1); }} className="input" aria-label="Data inicial" />
+          <input type="date" value={dataFim} onChange={e => { setDataFim(e.target.value); setPeriodo('personalizado'); setPage(1); }} className="input" aria-label="Data final" />
+          <select value={operadorId} onChange={e => { setOperadorId(e.target.value); setPage(1); }} className="input">
+            <option value="">Todos os operadores</option>
+            {operadores.map(op => <option key={op.id} value={op.id}>{op.nome}</option>)}
+          </select>
+          <select value={formaPagamento} onChange={e => { setFormaPagamento(e.target.value); setPage(1); }} className="input">
+            <option value="">Todas as formas</option>
+            <option value="DINHEIRO">Dinheiro</option><option value="PIX">PIX</option>
+            <option value="DEBITO">Débito</option><option value="CREDITO">Crédito</option>
+            <option value="TRANSFERENCIA">Transferência</option><option value="FIADO">Faturado / Fiado</option>
+          </select>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 mt-3">
+          <select value={filtroStatus} onChange={e => { setFiltroStatus(e.target.value); setPage(1); }} className="input max-w-xs">
+            <option value="">Todos os status</option><option value="FINALIZADA">Finalizadas</option>
+            <option value="CANCELADA">Canceladas</option><option value="RASCUNHO">Rascunho</option>
+          </select>
+          <div className="flex gap-2">
+            <button onClick={() => exportar('csv')} disabled={exportando} className="bg-cyan-800 hover:bg-cyan-900 text-white px-3 py-2 rounded text-sm inline-flex items-center gap-2 disabled:opacity-50">
+              {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileDown className="w-4 h-4" />} Exportar CSV
+            </button>
+            <button onClick={() => exportar('xlsx')} disabled={exportando} className="bg-emerald-700 hover:bg-emerald-800 text-white px-3 py-2 rounded text-sm inline-flex items-center gap-2 disabled:opacity-50">
+              {exportando ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />} Exportar Excel
+            </button>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 mt-2">A exportação consulta o banco e inclui todos os registros do filtro, não apenas as 50 linhas exibidas na página. Excel contém abas de vendas, itens e conciliação por pagamento.</p>
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-x-auto">

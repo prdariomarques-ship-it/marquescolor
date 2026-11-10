@@ -265,9 +265,14 @@ export const api = {
 
   // Vendas
   vendas: {
-    list: (params?: { busca?: string; status?: string; dataInicio?: string; dataFim?: string; page?: number; pageSize?: number }) => {
+    list: (params?: { busca?: string; status?: string; dataInicio?: string; dataFim?: string; operadorId?: string; formaPagamento?: string; page?: number; pageSize?: number }) => {
       const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
       return request<{ data: Array<any>; page: number; pageSize: number; total: number; totalPages: number }>(`/vendas${qs}`);
+    },
+    operadores: () => request<Array<{ id: string; nome: string }>>('/vendas/operadores'),
+    exportar: (params?: { status?: string; dataInicio?: string; dataFim?: string; operadorId?: string; formaPagamento?: string }) => {
+      const qs = params ? '?' + new URLSearchParams(params as any).toString() : '';
+      return request<{ exportadoEm: string; totalRegistros: number; limiteAplicado: boolean; vendas: Array<any> }>(`/vendas/exportar${qs}`);
     },
     get: (id: string) => request(`/vendas/${id}`),
     finalizar: (data: any) => request('/vendas', { method: 'POST', body: JSON.stringify(data) }),
@@ -310,6 +315,21 @@ export const api = {
         status: string; clienteNome: string; criadoEm: string;
       }>;
     }>('/dashboard/metricas'),
+    metas: () => request<{
+      competencia: string;
+      faturamentoMesCentavos: number;
+      metaMensal: { valorMetaCentavos: number; cenario: string; origem: string; atualizadoEm: string } | null;
+      percentualAtingido: number;
+      restanteCentavos: number;
+      ritmoDiarioCentavos: number;
+      diasRestantes: number;
+      historico: Array<{ competencia: string; mes: string; faturamentoCentavos: number }>;
+      mediaPonderadaCentavos: number;
+      crescimentoTendenciaPct: number;
+      sugestoesCentavos: { conservador: number; moderado: number; arrojado: number };
+    }>('/dashboard/metas'),
+    salvarMeta: (valorMetaCentavos: number, cenario: 'conservador' | 'moderado' | 'arrojado' | 'manual') =>
+      request('/dashboard/metas', { method: 'PUT', body: JSON.stringify({ valorMetaCentavos, cenario }) }),
   },
 
   // Compras
@@ -378,11 +398,7 @@ export const api = {
 
   // Backup
   backup: {
-    exportar: async () => {
-      const token = getToken();
-      const res = await fetch('/api/backup/exportar', { headers: { Authorization: token ? `Bearer ${token}` : '' } });
-      return await res.json();
-    },
+    exportar: () => request<any>('/backup/exportar'),
     restaurar: (dados: any) => request('/backup/restaurar', { method: 'POST', body: JSON.stringify(dados) }),
   },
 
