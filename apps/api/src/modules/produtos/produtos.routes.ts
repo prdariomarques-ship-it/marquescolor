@@ -141,9 +141,9 @@ export const produtosRoutes: FastifyPluginAsync = async (app) => {
       const produto = await prisma.produto.create({
         data: {
           ...parsed.data,
-          // Define margem automatica se nao passada
-          margemPercentual: parsed.data.precoCustoCentavos > 0
-            ? ((parsed.data.precoVendaCentavos - parsed.data.precoCustoCentavos) / parsed.data.precoCustoCentavos) * 100
+          // Define margem automatica se nao passada (margem bruta sobre receita)
+          margemPercentual: parsed.data.precoVendaCentavos > 0
+            ? ((parsed.data.precoVendaCentavos - parsed.data.precoCustoCentavos) / parsed.data.precoVendaCentavos) * 100
             : 0,
         },
         include: { marca: true, categoria: true },
@@ -170,11 +170,11 @@ export const produtosRoutes: FastifyPluginAsync = async (app) => {
     if (!antes) return reply.code(404).send({ erro: 'Produto nao encontrado' });
 
     const data = { ...parsed.data } as any;
-    // Recalcula margem se custos mudaram
+    // Recalcula margem se custos mudaram (margem bruta sobre receita)
     if (data.precoCustoCentavos !== undefined || data.precoVendaCentavos !== undefined) {
       const custo = data.precoCustoCentavos ?? antes.precoCustoCentavos;
       const venda = data.precoVendaCentavos ?? antes.precoVendaCentavos;
-      data.margemPercentual = custo > 0 ? ((venda - custo) / custo) * 100 : 0;
+      data.margemPercentual = venda > 0 ? ((venda - custo) / venda) * 100 : 0;
     }
 
     try {
@@ -277,7 +277,7 @@ export const produtosRoutes: FastifyPluginAsync = async (app) => {
 
       const precoCusto = d.precoCustoCentavos || 0;
       const precoVenda = d.precoVendaCentavos || 0;
-      const margem = precoCusto > 0 ? ((precoVenda - precoCusto) / precoCusto) * 100 : 0;
+      const margem = precoVenda > 0 ? ((precoVenda - precoCusto) / precoVenda) * 100 : 0;
 
       const dadosProduto = {
         codigoInterno: d.codigoInterno,
@@ -296,6 +296,12 @@ export const produtosRoutes: FastifyPluginAsync = async (app) => {
         estoqueMinimo: d.estoqueMinimo || 0,
         estoqueMaximo: d.estoqueMaximo || 0,
         localizacao: d.localizacao || null,
+        ncm: d.ncm || null,
+        cest: d.cest || null,
+        cfop: d.cfop || null,
+        cstCsosn: d.cstCsosn || null,
+        origem: d.origem !== undefined ? Number(d.origem) : 0,
+        unidadeTributavel: d.unidadeTributavel || null,
         ativo: true,
       };
 
@@ -339,8 +345,8 @@ export const produtosRoutes: FastifyPluginAsync = async (app) => {
 
   // Template CSV para download
   app.get('/produtos/template-csv', { preHandler: authenticate }, async (_req, reply) => {
-    const cabecalho = 'codigoInterno,codigoBarras,nome,descricao,marcaNome,categoriaNome,unidade,cor,acabamento,volume,precoCustoCentavos,precoVendaCentavos,estoqueAtual,estoqueMinimo,estoqueMaximo,localizacao';
-    const exemplo = '001,7891234567890,Tinta Acrilica Branca 18L,,Suvinil,Tinta Acrilica,LATAS,Branco,Fosco,18L,28500,39900,10,5,50,Prateleira A1';
+    const cabecalho = 'codigoInterno,codigoBarras,nome,descricao,marcaNome,categoriaNome,unidade,cor,acabamento,volume,precoCustoCentavos,precoVendaCentavos,estoqueAtual,estoqueMinimo,estoqueMaximo,localizacao,ncm,cest,cfop,cstCsosn,origem,unidadeTributavel';
+    const exemplo = '001,7891234567890,Tinta Acrilica Branca 18L,,Suvinil,Tinta Acrilica,LATAS,Branco,Fosco,18L,28500,39900,10,5,50,Prateleira A1,32081010,2400100,5102,0102,0,UN';
     return reply.type('text/csv').send(`${cabecalho}\n${exemplo}\n`);
   });
 };

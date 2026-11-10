@@ -9,7 +9,7 @@
     "start": "dotenv -e ../../.env --override -- node dist/server.js",
     "db:push": "dotenv -e ../../.env --override -- prisma db push",
     "db:seed": "dotenv -e ../../.env --override -- tsx prisma/seed.ts",
-    "test": "dotenv -e ../../.env --override -- prisma db push --skip-generate && dotenv -e ../../.env --override -- node --import tsx --test test/auth.test.ts test/health.test.ts test/produtos.test.ts",
+    "test": "dotenv -e ../../.env --override -- prisma db push --skip-generate && dotenv -e ../../.env --override -- node --import tsx --test --test-concurrency=1 test/auth.test.ts test/health.test.ts test/produtos.test.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

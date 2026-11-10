@@ -65,6 +65,7 @@ export const vendasRoutes: FastifyPluginAsync = async (app) => {
           produtoId: string;
           quantidade: number;
           precoUnitarioCentavos: number;
+          custoUnitarioCentavos?: number | null;
           descontoItemCentavos: number;
           subtotalCentavos: number;
           nomeProdutoSnapshot: string;
@@ -98,6 +99,7 @@ export const vendasRoutes: FastifyPluginAsync = async (app) => {
             produtoId: produto.id,
             quantidade: item.quantidade,
             precoUnitarioCentavos: item.precoUnitarioCentavos,
+            custoUnitarioCentavos: produto.precoCustoCentavos,
             descontoItemCentavos: item.descontoItemCentavos,
             subtotalCentavos: subtotalItem,
             nomeProdutoSnapshot: produto.nome,

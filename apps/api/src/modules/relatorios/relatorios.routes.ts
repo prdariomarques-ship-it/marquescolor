@@ -80,7 +80,7 @@ export const relatoriosRoutes: FastifyPluginAsync = async (app) => {
     return reply.send({ formas: Array.from(porForma.entries()).map(([forma, v]) => ({ forma, ...v })) });
   });
 
-  // Lucro (precisa de custo — vamos pegar do item_venda usando preco de custo na data da venda, aproximado pelo atual)
+  // Lucro (usa snapshot de custoUnitarioCentavos no item_venda com fallback para o custo atual do produto)
   app.get('/relatorios/lucro', { preHandler: [authenticate, requireRole('ADMIN', 'GERENTE')] }, async (req, reply) => {
     const q = req.query as { dataInicio?: string; dataFim?: string };
     const where: any = { status: 'FINALIZADA' };
@@ -97,7 +97,10 @@ export const relatoriosRoutes: FastifyPluginAsync = async (app) => {
     for (const v of vendas) {
       receita += v.totalCentavos;
       for (const it of v.itens) {
-        custo += it.produto.precoCustoCentavos * it.quantidade;
+        const custoUnit = (it.custoUnitarioCentavos !== null && it.custoUnitarioCentavos !== undefined)
+          ? it.custoUnitarioCentavos
+          : it.produto.precoCustoCentavos;
+        custo += custoUnit * it.quantidade;
       }
     }
     const lucro = receita - custo;

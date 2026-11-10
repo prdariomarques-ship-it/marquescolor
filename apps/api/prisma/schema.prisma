@@ -101,6 +101,12 @@ model Produto {
   localizacao            String?
   fornecedorPrincipalId  String?
   fotoUrl                String?
+  ncm                    String?
+  cest                   String?
+  cfop                   String?
+  cstCsosn               String?
+  origem                 Int?     @default(0)
+  unidadeTributavel      String?
   ativo                  Boolean  @default(true)
   criadoEm               DateTime @default(now())
   atualizadoEm           DateTime @updatedAt
@@ -224,6 +230,7 @@ model ItemVenda {
   produtoId             String
   quantidade            Float
   precoUnitarioCentavos Int
+  custoUnitarioCentavos Int?
   descontoItemCentavos  Int      @default(0)
   subtotalCentavos      Int
   nomeProdutoSnapshot   String
