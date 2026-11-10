@@ -58,7 +58,19 @@ export async function abrirRevisao(db: Db, ctx: Ctx, r: RevisaoDesejada) {
   const existente = await db.reviewQueueItem.findUnique({
     where: { entidadeTipo_entidadeId_motivo_ref: { entidadeTipo: r.entidadeTipo, entidadeId: r.entidadeId, motivo: r.motivo, ref } },
   });
-  if (existente) return { item: existente, criado: false };
+  if (existente) {
+    // Itens fechados AUTOMATICAMENTE (sem decisao humana) reabrem se a condicao voltar a existir.
+    // Decisoes humanas (resolvidoPorId preenchido) nunca sao reabertas.
+    if (existente.status === 'RESOLVIDO' && !existente.resolvidoPorId && !MOTIVOS_MANUAIS.has(existente.motivo)) {
+      const reaberto = await db.reviewQueueItem.update({
+        where: { id: existente.id },
+        data: { status: 'ABERTO', resolucao: null, resolvidoEm: null, detalhe: r.detalhe ?? existente.detalhe, dadosJson: r.dados === undefined ? existente.dadosJson : JSON.stringify(r.dados) },
+      });
+      await registrarLog(db, ctx, { entidadeTipo: r.entidadeTipo, entidadeId: r.entidadeId, acao: 'REVISAO_REABERTA', status: 'WARN', mensagem: r.motivo });
+      return { item: reaberto, criado: false };
+    }
+    return { item: existente, criado: false };
+  }
   const item = await db.reviewQueueItem.create({
     data: {
       documentoId: r.documentoId ?? null,
@@ -105,4 +117,4 @@ export async function sincronizarRevisoes(db: Db, ctx: Ctx, documentoId: string,
   }
 }
 
-export const MOTIVOS_MANUAIS = new Set(['FALHA_INTEGRACAO_ESTOQUE', 'EVENTO_FISCAL_CANCELAMENTO', 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO']);
+export const MOTIVOS_MANUAIS = new Set(['FALHA_INTEGRACAO_ESTOQUE', 'EVENTO_FISCAL_CANCELAMENTO', 'EVENTO_FISCAL_RECEBIDO', 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO']);

@@ -409,7 +409,6 @@ export async function rejeitarDocumento(ctx: Ctx, documentoId: string, motivo: s
   if (doc.statusEstoque === 'APLICADO') throw new ErroNegocio(409, 'Estoque ja foi atualizado por este documento; use um ajuste/estorno de estoque');
   if (motivo.trim().length < 5) throw new ErroNegocio(400, 'Informe o motivo da rejeicao (minimo 5 caracteres)');
   await prisma.nfeDocument.update({ where: { id: doc.id }, data: { statusConferencia: 'REJEITADA', rejeitadoPorId: ctx.usuarioId ?? null, rejeitadoEm: new Date() } });
-  if (doc.compraId) await prisma.compra.updateMany({ where: { id: doc.compraId, status: 'AGUARDANDO_RECEBIMENTO' }, data: { status: 'CANCELADA' } });
   await registrarLog(prisma, ctx, { entidadeTipo: 'NFE', entidadeId: doc.id, acao: 'DOCUMENTO_REJEITADO', status: 'WARN', mensagem: motivo });
   await registrarAuditoria(prisma, { usuarioId: ctx.usuarioId, acao: 'NFE_REJEITADA', entidade: 'NfeDocument', entidadeId: doc.id, dadosDepois: { motivo }, ip: ctx.ip });
 }
@@ -458,43 +457,22 @@ export async function aprovarDocumento(ctx: Ctx, documentoId: string, d: { obser
   const prep = await montarCompraPreparada(documentoId);
   if (!prep.fornecedorId || prep.itens.length === 0) throw new ErroNegocio(422, 'Compra sem fornecedor ou sem itens elegiveis');
 
-  const compraId = await prisma.$transaction(async (tx) => {
-    const compra = await tx.compra.create({
-      data: {
-        fornecedorId: prep.fornecedorId!,
-        numeroPedido: prep.numeroPedido,
-        dataCompra: prep.dataCompra ?? new Date(),
-        subtotalCentavos: prep.subtotalCentavos,
-        descontoCentavos: prep.descontoCentavos,
-        freteCentavos: prep.freteCentavos,
-        totalCentavos: prep.totalNfCentavos,
-        formaPagamento: null,
-        observacoes: `NF-e ${doc.chaveAcesso ?? ''} aprovada. Aguardando recebimento fisico. ATENCAO: custo e preco NAO foram atualizados por este fluxo. Nao use /compras/:id/confirmar (sobrescreve custo).`,
-        usuarioId: ctx.usuarioId ?? 'sistema',
-        status: 'AGUARDANDO_RECEBIMENTO',
-      },
-    });
-    for (const it of prep.itens) {
-      await tx.itemCompra.create({
-        data: {
-          compraId: compra.id, produtoId: it.produtoId!, quantidade: it.quantidade,
-          precoCustoCentavos: Math.round(it.valorTotalCentavos / (it.quantidade || 1)),
-          subtotalCentavos: it.valorTotalCentavos,
-        },
-      });
-    }
+  // NAO cria Compra aqui: um registro Compra em qualquer status diferente de CONFIRMADA poderia ser
+  // confirmado pela rota existente /compras/:id/confirmar, que move estoque E sobrescreve o custo.
+  // "Compra aprovada" = NfeDocument.statusCompra=APROVADA + snapshot de compra preparada. A Compra
+  // so nasce (ja CONFIRMADA) dentro da transacao que atualiza o estoque (aplicarEstoque).
+  await prisma.$transaction(async (tx) => {
     await tx.nfeDocument.update({
       where: { id: documentoId },
-      data: { statusCompra: 'APROVADA', statusConferencia: 'CONFERIDA', aprovadoPorId: ctx.usuarioId ?? null, aprovadoEm: new Date(), compraId: compra.id },
+      data: { statusCompra: 'APROVADA', statusConferencia: 'CONFERIDA', aprovadoPorId: ctx.usuarioId ?? null, aprovadoEm: new Date() },
     });
     for (const a of alertas) {
       await tx.reviewQueueItem.update({ where: { id: a.id }, data: { status: 'RESOLVIDO', resolucao: `ACEITO_NA_APROVACAO${d.observacao ? `: ${d.observacao}` : ''}`, resolvidoPorId: ctx.usuarioId ?? null, resolvidoEm: new Date() } });
     }
-    await registrarLog(tx, ctx, { entidadeTipo: 'NFE', entidadeId: documentoId, acao: 'COMPRA_APROVADA', mensagem: d.observacao ?? null, detalhe: { compraId: compra.id, alertasAceitos: alertas.map((a) => a.motivo) } });
-    return compra.id;
+    await registrarLog(tx, ctx, { entidadeTipo: 'NFE', entidadeId: documentoId, acao: 'COMPRA_APROVADA', mensagem: d.observacao ?? null, detalhe: { alertasAceitos: alertas.map((a) => a.motivo), compraPreparada: prep } });
   });
-  await registrarAuditoria(prisma, { usuarioId: ctx.usuarioId, acao: 'NFE_APROVADA', entidade: 'NfeDocument', entidadeId: documentoId, dadosDepois: { compraId, observacao: d.observacao }, ip: ctx.ip });
-  return { compraId };
+  await registrarAuditoria(prisma, { usuarioId: ctx.usuarioId, acao: 'NFE_APROVADA', entidade: 'NfeDocument', entidadeId: documentoId, dadosDepois: { observacao: d.observacao }, ip: ctx.ip });
+  return { documentoId, compraPreparada: prep };
 }
 
 // ---------------------------------------------------------------- recebimento fisico + estoque
@@ -514,13 +492,19 @@ export async function confirmarRecebimento(
   const bloqueio = await prisma.reviewQueueItem.findMany({ where: { documentoId, status: 'ABERTO', severidade: 'BLOQUEANTE', NOT: { motivo: 'FALHA_INTEGRACAO_ESTOQUE' } } });
   if (bloqueio.length) throw new ErroNegocio(422, 'Ha pendencias bloqueantes abertas (ex.: evento de cancelamento)', bloqueio.map((b) => ({ id: b.id, motivo: b.motivo })));
 
-  const itens = await prisma.nfeItem.findMany({ where: { documentoId }, orderBy: { numeroItem: 'asc' } });
+  const itens = await prisma.nfeItem.findMany({ where: { documentoId }, include: { produto: true }, orderBy: { numeroItem: 'asc' } });
   const elegiveis = itens.filter((i) => i.produtoId && ['MAPEADO', 'CONFIRMADO'].includes(i.statusVinculo));
+  const unidadeDifere = (i: (typeof itens)[number]) => !!i.unidade && !!i.produto?.unidade && i.unidade.toUpperCase() !== i.produto.unidade.toUpperCase();
 
   if (!doc.recebimentoFisicoEm) {
     // Etapa A: registrar o que foi recebido fisicamente (decisao humana)
     const recebidas = new Map<string, number>();
     if (d.recebimentoIntegral) {
+      const comUnidadeDiferente = elegiveis.filter(unidadeDifere);
+      if (comUnidadeDiferente.length) {
+        throw new ErroNegocio(422, 'recebimentoIntegral nao se aplica a itens cuja unidade da NF difere da unidade do produto; informe a quantidade recebida NA UNIDADE DO PRODUTO',
+          comUnidadeDiferente.map((i) => ({ itemId: i.id, unidadeNf: i.unidade, unidadeProduto: i.produto?.unidade, quantidadeNf: i.quantidade })));
+      }
       for (const i of elegiveis) recebidas.set(i.id, i.quantidade);
     } else {
       for (const e of d.itens ?? []) recebidas.set(e.itemId, e.quantidadeRecebida);
@@ -529,7 +513,8 @@ export async function confirmarRecebimento(
       for (const k of recebidas.keys()) if (!elegiveis.some((i) => i.id === k)) throw new ErroNegocio(400, `Item ${k} nao pertence a esta NF-e ou nao e elegivel`);
     }
     for (const [, q] of recebidas) if (!Number.isFinite(q) || q < 0) throw new ErroNegocio(400, 'Quantidade recebida invalida');
-    const divergentes = elegiveis.filter((i) => Math.abs((recebidas.get(i.id) ?? 0) - i.quantidade) > 1e-9);
+    // unidade diferente conta SEMPRE como divergencia (a conversao precisa de justificativa auditavel)
+    const divergentes = elegiveis.filter((i) => unidadeDifere(i) || Math.abs((recebidas.get(i.id) ?? 0) - i.quantidade) > 1e-9);
     if (divergentes.length && (d.motivoDivergencia ?? '').trim().length < 5) {
       throw new ErroNegocio(422, 'Quantidade recebida diverge da NF-e; informe motivoDivergencia (minimo 5 caracteres)',
         divergentes.map((i) => ({ itemId: i.id, nf: i.quantidade, recebida: recebidas.get(i.id) })));
@@ -540,7 +525,7 @@ export async function confirmarRecebimento(
       for (const i of divergentes) {
         await abrirRevisao(tx, ctx, {
           documentoId, entidadeTipo: 'NFE_ITEM', entidadeId: i.id, motivo: 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO', severidade: 'ALERTA',
-          detalhe: `Item ${i.numeroItem}: NF ${i.quantidade}, recebido ${recebidas.get(i.id)}. Motivo: ${d.motivoDivergencia}`, dados: { nf: i.quantidade, recebida: recebidas.get(i.id) },
+          detalhe: `Item ${i.numeroItem}: NF ${i.quantidade} ${i.unidade ?? ''}, recebido ${recebidas.get(i.id)} ${i.produto?.unidade ?? ''}. Motivo: ${d.motivoDivergencia}`, dados: { nf: i.quantidade, unidadeNf: i.unidade, recebida: recebidas.get(i.id), unidadeProduto: i.produto?.unidade },
         });
         await tx.reviewQueueItem.updateMany({
           where: { entidadeTipo: 'NFE_ITEM', entidadeId: i.id, motivo: 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO' },
@@ -571,7 +556,23 @@ export async function aplicarEstoque(ctx: Ctx, deps: NfeDeps, documentoId: strin
         out.push({ itemId: i.id, movimentacaoId: r.movimentacaoId, quantidade: i.quantidadeRecebida });
       }
       await tx.nfeDocument.update({ where: { id: documentoId }, data: { statusEstoque: 'APLICADO', estoqueAtualizadoEm: new Date() } });
-      if (doc.compraId) await tx.compra.update({ where: { id: doc.compraId }, data: { status: 'CONFIRMADA' } });
+      // A Compra nasce JA CONFIRMADA e junto com a entrada em estoque (mesma transacao): nao existe janela
+      // em que /compras/:id/confirmar possa duplicar estoque nem sobrescrever custo. O custo NAO e
+      // atualizado aqui; ItemCompra.precoCustoCentavos e apenas o unitario da NF (informativo).
+      if (!doc.fornecedorId) throw new Error('documento sem fornecedor');
+      const recebidos = await tx.nfeItem.findMany({ where: { documentoId, quantidadeRecebida: { gt: 0 }, produtoId: { not: null } } });
+      const compra = await tx.compra.create({
+        data: {
+          fornecedorId: doc.fornecedorId, numeroPedido: `NFE-${doc.serie ?? '0'}/${doc.numero ?? '0'}`, dataCompra: doc.dataEmissao ?? new Date(),
+          subtotalCentavos: recebidos.reduce((a, i) => a + i.valorTotalCentavos, 0), descontoCentavos: doc.valorDescontoCentavos, freteCentavos: doc.valorFreteCentavos,
+          totalCentavos: doc.valorTotalCentavos, usuarioId: ctx.usuarioId ?? 'sistema', status: 'CONFIRMADA',
+          observacoes: `Gerada pela NF-e ${doc.chaveAcesso ?? ''} apos aprovacao humana e recebimento fisico. Estoque atualizado; custo e preco NAO foram alterados por este fluxo.`,
+        },
+      });
+      for (const i of recebidos) {
+        await tx.itemCompra.create({ data: { compraId: compra.id, produtoId: i.produtoId!, quantidade: i.quantidadeRecebida!, precoCustoCentavos: i.valorUnitarioCentavos, subtotalCentavos: i.valorTotalCentavos } });
+      }
+      await tx.nfeDocument.update({ where: { id: documentoId }, data: { compraId: compra.id } });
       await tx.reviewQueueItem.updateMany({
         where: { documentoId, motivo: 'FALHA_INTEGRACAO_ESTOQUE', status: 'ABERTO' },
         data: { status: 'RESOLVIDO', resolucao: 'RETENTATIVA_OK', resolvidoEm: new Date() },

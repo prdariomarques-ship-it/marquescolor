@@ -254,8 +254,11 @@ test('fluxo completo: aprovacao humana -> compra aguardando -> recebimento fisic
   assert.equal(d.statusCompra, 'APROVADA');
   assert.equal(d.statusConferencia, 'CONFERIDA');
   assert.ok(d.aprovadoEm);
-  const compra = await prisma.compra.findUniqueOrThrow({ where: { id: d.compraId } });
-  assert.equal(compra.status, 'AGUARDANDO_RECEBIMENTO');
+  // aprovar NAO cria Compra: nada que a rota existente /compras/:id/confirmar possa confirmar
+  // (ela moveria estoque e sobrescreveria o custo, furando o gate de recebimento fisico).
+  assert.equal(d.compraId, null);
+  assert.equal(await prisma.compra.count(), 0);
+  assert.equal(await prisma.compra.count({ where: { status: { not: 'CONFIRMADA' } } }), 0);
   // aprovar NAO movimenta estoque nem altera custo
   let prod = await prisma.produto.findUniqueOrThrow({ where: { id: p.id } });
   assert.equal(prod.estoqueAtual, 5);
@@ -286,7 +289,15 @@ test('fluxo completo: aprovacao humana -> compra aguardando -> recebimento fisic
   d = await doc(docId);
   assert.equal(d.statusEstoque, 'APLICADO');
   assert.ok(d.recebimentoFisicoEm && d.estoqueAtualizadoEm);
-  assert.equal((await prisma.compra.findUniqueOrThrow({ where: { id: d.compraId } })).status, 'CONFIRMADA');
+  // a Compra nasce CONFIRMADA junto com a entrada em estoque; confirmar de novo pela rota existente e recusado
+  const compra = await prisma.compra.findUniqueOrThrow({ where: { id: d.compraId }, include: { itens: true } });
+  assert.equal(compra.status, 'CONFIRMADA');
+  assert.equal(compra.itens.length, 1);
+  assert.equal(compra.itens[0].quantidade, 10);
+  const reconfirma = await post(`/api/compras/${compra.id}/confirmar`, gerente);
+  assert.equal(reconfirma.statusCode, 400);
+  assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).estoqueAtual, 15, 'sem estoque em duplicidade');
+  assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).precoCustoCentavos, 1250);
   // historico registra cada decisao
   const acoes = d.historico.map((h: any) => h.acao);
   for (const a of ['DOCUMENTO_INTERPRETADO', 'COMPRA_APROVADA', 'RECEBIMENTO_FISICO_CONFIRMADO', 'ESTOQUE_ATUALIZADO']) assert.ok(acoes.includes(a), `faltou ${a}`);
@@ -321,7 +332,7 @@ test('divergencia de quantidade no recebimento: exige motivo e registra; entra a
   assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).estoqueAtual, 8);
   const rev = await prisma.reviewQueueItem.findFirstOrThrow({ where: { documentoId: docId, motivo: 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO' } });
   assert.equal(rev.status, 'RESOLVIDO');
-  assert.match(rev.detalhe ?? '', /NF 10, recebido 8/);
+  assert.match(rev.detalhe ?? '', /NF 10 UN, recebido 8 UN/);
 });
 
 test('falha de integracao com estoque: nada e gravado, estado FALHA, pendencia aberta; retentativa aplica uma unica vez', async () => {
@@ -337,7 +348,7 @@ test('falha de integracao com estoque: nada e gravado, estado FALHA, pendencia a
   assert.ok(d.recebimentoFisicoEm, 'recebimento fisico continua registrado (etapa separada)');
   assert.ok(d.revisoes.some((x: any) => x.motivo === 'FALHA_INTEGRACAO_ESTOQUE' && x.status === 'ABERTO'));
   assert.ok(d.historico.some((h: any) => h.acao === 'ESTOQUE_FALHA' && h.status === 'ERROR'));
-  assert.equal((await prisma.compra.findUniqueOrThrow({ where: { id: d.compraId } })).status, 'AGUARDANDO_RECEBIMENTO');
+  assert.equal(await prisma.compra.count(), 0, 'sem Compra enquanto o estoque nao foi atualizado');
 
   estoqueFalha = false;
   const retry = await post(`/api/nfe/documentos/${docId}/aplicar-estoque`, gerente);
@@ -438,4 +449,94 @@ test('falha de processamento: arquivo preservado e marcado; reprocessar apos cor
   assert.equal(await prisma.documentoArquivo.count(), 1);
   assert.equal((await prisma.reviewQueueItem.findFirstOrThrow({ where: { entidadeId: r.arquivoId, motivo: 'FALHA_PROCESSAMENTO' } })).status, 'RESOLVIDO');
   await appBom.close();
+});
+
+test('unidade da NF diferente da do produto: recebimentoIntegral e recusado; exige quantidade na unidade do produto e justificativa', async () => {
+  const f = await criarFornecedor(CNPJ_FORNECEDOR);
+  const p = await criarProduto({ nome: 'Lata 3,6L', custo: 1000, estoque: 0, unidade: 'UN' });
+  await prisma.produtoFornecedorMap.create({ data: { fornecedorId: f.id, codigoFornecedor: 'CX6', produtoId: p.id } });
+  const r = await enviarXml({ numero: 71, itens: [{ codigo: 'CX6', descricao: 'CAIXA COM 6 LATAS', unidade: 'CX', quantidade: '1.0000', valorUnitario: '60.0000000000' }] });
+  const docId = r.documentoIds[0];
+  const d = await doc(docId);
+  assert.ok(d.revisoes.some((x: any) => x.motivo === 'UNIDADE_DIVERGENTE' && x.severidade === 'ALERTA'));
+  assert.equal((await post(`/api/nfe/documentos/${docId}/aprovar`, gerente, { reconheceAlertas: true })).statusCode, 200);
+  // 1 CX nao pode virar 1 UN por "recebimento integral"
+  const integral = await post(`/api/nfe/documentos/${docId}/confirmar-recebimento`, gerente, { recebimentoIntegral: true });
+  assert.equal(integral.statusCode, 422);
+  assert.match((integral.json() as any).erro, /unidade/i);
+  assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).estoqueAtual, 0);
+  assert.equal(await prisma.movimentacaoEstoque.count(), 0);
+  const itemId = d.itens[0].id;
+  // quantidade explicita na unidade do produto, mas ainda exige a justificativa da conversao
+  const semMotivo = await post(`/api/nfe/documentos/${docId}/confirmar-recebimento`, gerente, { itens: [{ itemId, quantidadeRecebida: 6 }] });
+  assert.equal(semMotivo.statusCode, 422);
+  const ok = await post(`/api/nfe/documentos/${docId}/confirmar-recebimento`, gerente, { itens: [{ itemId, quantidadeRecebida: 6 }], motivoDivergencia: 'conversao: 1 CX = 6 UN' });
+  assert.equal(ok.statusCode, 200, ok.body);
+  assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).estoqueAtual, 6);
+  const rev = await prisma.reviewQueueItem.findFirstOrThrow({ where: { documentoId: docId, motivo: 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO' } });
+  assert.match(rev.detalhe ?? '', /1 CX.*6 UN/);
+});
+
+test('evento fiscal nao-cancelamento (carta de correcao 110110) sobrevive a reconciliacao e a aprovacao; exige decisao humana', async () => {
+  const { docId } = await cenarioAprovavel({ numero: 7002 });
+  const chave = (await doc(docId)).chaveAcesso as string;
+  const xmlCce = montarXmlEventoCancelamento(chave).replace('<tpEvento>110111</tpEvento>', '<tpEvento>110110</tpEvento>').replace('Cancelamento', 'Carta de Correcao');
+  const ev = await upload(app, gerente, 'cce.xml', 'text/xml', Buffer.from(xmlCce));
+  assert.equal(ev.corpo.resultados[0].acao, 'EVENTO_REGISTRADO');
+  await post(`/api/nfe/documentos/${docId}/reconciliar`, gerente);
+  let d = await doc(docId);
+  const alerta = d.revisoes.find((x: any) => x.motivo === 'EVENTO_FISCAL_RECEBIDO');
+  assert.equal(alerta.status, 'ABERTO', 'reconciliar nao pode fechar automaticamente um alerta de evento fiscal');
+  // aprovar sem reconhecer falha; reconhecendo, a decisao fica registrada
+  assert.equal((await post(`/api/nfe/documentos/${docId}/aprovar`, gerente, {})).statusCode, 422);
+  assert.equal((await post(`/api/nfe/documentos/${docId}/aprovar`, gerente, { reconheceAlertas: true })).statusCode, 200);
+  d = await doc(docId);
+  assert.equal(d.revisoes.find((x: any) => x.motivo === 'EVENTO_FISCAL_RECEBIDO').status, 'RESOLVIDO');
+  assert.ok(d.revisoes.find((x: any) => x.motivo === 'EVENTO_FISCAL_RECEBIDO').resolvidoPorId, 'decisao humana identificada');
+});
+
+test('revisao fechada AUTOMATICAMENTE reabre se a condicao voltar; decisao HUMANA nunca reabre', async () => {
+  const f = await criarFornecedor(CNPJ_FORNECEDOR);
+  const p = await criarProduto({ nome: 'X' });
+  const r = await enviarXml({ numero: 81, itens: [{ codigo: 'K1', quantidade: '1.0000', valorUnitario: '10.0000000000', valorTotal: '10.00' }, { codigo: 'K2', quantidade: '2.0000', valorUnitario: '5.0000000000', valorTotal: '12.00' }] });
+  const docId = r.documentoIds[0];
+  let d = await doc(docId);
+  const k1 = d.itens.find((i: any) => i.codigoFornecedor === 'K1');
+  assert.ok(d.revisoes.some((x: any) => x.motivo === 'PRODUTO_DESCONHECIDO' && x.entidadeId === k1.id && x.status === 'ABERTO'));
+  // mapa criado fora do fluxo humano de revisao: reconciliar fecha a pendencia automaticamente
+  const mapa = await prisma.produtoFornecedorMap.create({ data: { fornecedorId: f.id, codigoFornecedor: 'K1', produtoId: p.id } });
+  await post(`/api/nfe/documentos/${docId}/reconciliar`, gerente);
+  d = await doc(docId);
+  const fechada = d.revisoes.find((x: any) => x.motivo === 'PRODUTO_DESCONHECIDO' && x.entidadeId === k1.id);
+  assert.equal(fechada.status, 'RESOLVIDO');
+  assert.match(fechada.resolucao, /^AUTO/);
+  // o mapa some: a pendencia volta
+  await prisma.produtoFornecedorMap.delete({ where: { id: mapa.id } });
+  await post(`/api/nfe/documentos/${docId}/reconciliar`, gerente);
+  d = await doc(docId);
+  assert.equal(d.revisoes.find((x: any) => x.motivo === 'PRODUTO_DESCONHECIDO' && x.entidadeId === k1.id).status, 'ABERTO');
+  assert.ok(d.historico.some((h: any) => h.acao === 'REVISAO_REABERTA'));
+  // decisao humana (aceitar a divergencia de valor do item K2) NAO reabre
+  const div = d.revisoes.find((x: any) => x.motivo === 'DIVERGENCIA_VALOR_ITEM');
+  assert.equal((await post(`/api/nfe/fila-revisao/${div.id}/resolver`, gerente, { decisao: 'ACEITAR', observacao: 'arredondamento conferido com o fornecedor' })).statusCode, 200);
+  await post(`/api/nfe/documentos/${docId}/reconciliar`, gerente);
+  d = await doc(docId);
+  const apos = d.revisoes.find((x: any) => x.id === div.id);
+  assert.equal(apos.status, 'RESOLVIDO');
+  assert.ok(apos.resolvidoPorId);
+});
+
+test('autorizacao: vendedor e anonimo nao enviam nem decidem; leitura exige login', async () => {
+  const m = multipart([{ nome: 'n.xml', mime: 'text/xml', dados: xmlBuf({ numero: 91 }) }]);
+  const semToken = await app.inject({ method: 'POST', url: '/api/nfe/upload', headers: m.headers, payload: m.payload });
+  assert.equal(semToken.statusCode, 401);
+  const m2 = multipart([{ nome: 'n.xml', mime: 'text/xml', dados: xmlBuf({ numero: 91 }) }]);
+  const vend = await app.inject({ method: 'POST', url: '/api/nfe/upload', headers: { ...m2.headers, ...auth(vendedor) }, payload: m2.payload });
+  assert.equal(vend.statusCode, 403);
+  assert.equal(await prisma.documentoArquivo.count(), 0);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/nfe/documentos' })).statusCode, 401);
+  assert.equal((await get('/api/nfe/documentos', vendedor)).statusCode, 200);
+  assert.equal((await post('/api/nfe/fila-revisao/x/resolver', vendedor, { decisao: 'ACEITAR', observacao: 'abcdef' })).statusCode, 403);
+  assert.equal((await post('/api/nfe/itens/x/vincular-produto', vendedor, { produtoId: 'x' })).statusCode, 403);
+  assert.equal((await post('/api/nfe/documentos/x/confirmar-recebimento', vendedor, {})).statusCode, 403);
 });
