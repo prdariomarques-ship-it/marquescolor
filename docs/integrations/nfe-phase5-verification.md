@@ -1,6 +1,6 @@
 # Fase 5 — verificação de segurança e qualidade (2026-11-10)
 
-Ambiente de execução desta verificação: **Windows 11 + Node 22.23.2**, worktree `C:\Users\dario\marquescolor-nfe-wt`, SQLite isolado e descartável (`apps/api/prisma/.test-db/`). **Não** foi executada em container Linux nem na VPS (ver §3).
+Ambiente de execução desta verificação: **Windows 11 + Node 22.23.2**, worktree `C:\Users\dario\marquescolor-nfe-wt`, SQLite isolado e descartável (`apps/api/prisma/.test-db/`). Reproduzida também em **container Linux** (`node:22-bookworm-slim`, Debian 12, Node 22.23.4, cópia gravável do commit `f1e7d94`, `npm ci` + build + suíte; ver §4). **Não** foi executada na VPS nem com Poppler.
 
 | Ponto pedido | Resultado | Evidência (testes em `apps/api/test/`) |
 |---|---|---|
@@ -29,5 +29,16 @@ Os 17 testes de OCR aprovados em outro ambiente **não** puderam ser localizados
 ## 3. O que NÃO foi feito (e por quê)
 
 - **Baselines `fbd7cad`, containers Linux e inventário das 40 alterações de `/opt/ship-it`; recuperação dos 38 arquivos / branch `integration/ocr-pdv-additive` / merge `c23e7a3`:** pertencem ao repositório **ship-it / Dario OS**, que **não é este projeto** e que esta sessão está proibida de tocar (`C:\Users\dario\FlowCore\ship-it`, `C:\Users\dario\ship-it`); a VPS também não é acessível daqui. Nenhum desses commits existe neste repositório (`git cat-file` falha para `fbd7cad`, `c23e7a3`, `c011f4a`). Precisam ser conduzidos pela sessão que já tem esse contexto/autorização.
-- **Reprodução em container Linux:** o Docker existe nesta máquina, mas obter uma imagem Node exige download; aguarda confirmação do usuário.
 - Teste de Outlook/IMAP real, documentos fiscais reais, SEFAZ: pendentes (ver `nfe-ingestion.md` §13).
+
+## 4. Reprodução em container Linux (2026-11-10, autorizada pelo usuário)
+
+Imagem `node:22-bookworm-slim` (digest `sha256:5ec23b7c622b…`), cópia **gravável** do repositório (clone do commit `f1e7d94`, fora do worktree), `apt-get install openssl ca-certificates` (necessário ao Prisma), `npm ci`, `prisma generate`, `npm run build` (API + web), `npm test -w apps/api` com banco SQLite isolado e dados locais de OCR.
+
+| Cenário | Resultado |
+|---|---|
+| Linux **sem** fontes de sistema | 95 testes: **94 pass, 0 fail, 1 skipped** (OCR real) |
+| Linux **com** `fonts-dejavu-core` | 95 testes: **95 pass, 0 fail** (inclui OCR real sobre imagem e PDF escaneado) |
+| Windows 11 (referência) | 95/95 |
+
+Achado real da execução em Linux: **na primeira rodada o teste de OCR real falhou** (94/95) porque a imagem `slim` não tem fontes de sistema e o `@napi-rs/canvas` desenhou o texto **em branco** — problema do *fixture* de teste, não do OCR/produto (com `fonts-dejavu-core` os 11 testes passam). O teste agora detecta a ausência de fontes e fica `skipped` com a causa explícita. Documentos reais não sofrem disso (já trazem imagem/texto). Build, `npm ci` e o restante da suíte passaram nos dois cenários. Não foi usado Poppler nem o binário Tesseract.
