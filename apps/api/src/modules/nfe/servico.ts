@@ -520,8 +520,10 @@ export async function confirmarRecebimento(
         divergentes.map((i) => ({ itemId: i.id, nf: i.quantidade, recebida: recebidas.get(i.id) })));
     }
     await prisma.$transaction(async (tx) => {
+      // compare-and-set: so UMA chamada registra o recebimento fisico (chamadas concorrentes nao sobrescrevem quantidades)
+      const reserva = await tx.nfeDocument.updateMany({ where: { id: documentoId, recebimentoFisicoEm: null }, data: { recebimentoFisicoEm: new Date(), recebimentoFisicoPorId: ctx.usuarioId ?? null } });
+      if (reserva.count === 0) throw new ErroNegocio(409, 'Recebimento fisico ja registrado por outra chamada');
       for (const i of elegiveis) await tx.nfeItem.update({ where: { id: i.id }, data: { quantidadeRecebida: recebidas.get(i.id) ?? 0 } });
-      await tx.nfeDocument.update({ where: { id: documentoId }, data: { recebimentoFisicoEm: new Date(), recebimentoFisicoPorId: ctx.usuarioId ?? null } });
       for (const i of divergentes) {
         await abrirRevisao(tx, ctx, {
           documentoId, entidadeTipo: 'NFE_ITEM', entidadeId: i.id, motivo: 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO', severidade: 'ALERTA',
@@ -547,6 +549,9 @@ export async function aplicarEstoque(ctx: Ctx, deps: NfeDeps, documentoId: strin
   const ref = `NF-e ${doc.chaveAcesso ?? `${doc.serie}/${doc.numero}`}`;
   try {
     const movimentos = await prisma.$transaction(async (tx) => {
+      // compare-and-set ANTES de qualquer movimento: chamadas concorrentes nunca aplicam duas vezes (revertido junto se algo falhar)
+      const reserva = await tx.nfeDocument.updateMany({ where: { id: documentoId, statusEstoque: { not: 'APLICADO' } }, data: { statusEstoque: 'APLICADO', estoqueAtualizadoEm: new Date() } });
+      if (reserva.count === 0) return null;
       const itens = await tx.nfeItem.findMany({ where: { documentoId } });
       const out: { itemId: string; movimentacaoId: string; quantidade: number }[] = [];
       for (const i of itens) {
@@ -580,6 +585,7 @@ export async function aplicarEstoque(ctx: Ctx, deps: NfeDeps, documentoId: strin
       await registrarLog(tx, ctx, { entidadeTipo: 'NFE', entidadeId: documentoId, acao: 'ESTOQUE_ATUALIZADO', mensagem: `${out.length} movimentacao(oes)`, detalhe: out });
       return out;
     });
+    if (movimentos === null) return { jaAplicado: true, documentoId };
     await registrarAuditoria(prisma, { usuarioId: ctx.usuarioId, acao: 'NFE_ESTOQUE_ATUALIZADO', entidade: 'NfeDocument', entidadeId: documentoId, dadosDepois: { movimentos }, ip: ctx.ip });
     return { jaAplicado: false, documentoId, movimentos };
   } catch (e: any) {

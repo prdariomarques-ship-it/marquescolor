@@ -121,6 +121,7 @@ export const nfeRoutes: FastifyPluginAsync<NfeModuloOpcoes> = async (app, opcoes
       return reply.send(await reprocessarArquivo(ctxDe(req), documentos(), id));
     } catch (e: any) {
       if (e?.message === 'Arquivo nao encontrado') throw new ErroNegocio(404, e.message);
+      if (typeof e?.message === 'string' && e.message.startsWith('Integridade do arquivo original')) throw new ErroNegocio(409, e.message);
       throw e;
     }
   }));

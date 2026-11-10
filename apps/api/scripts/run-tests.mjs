@@ -44,7 +44,7 @@ const padrao = [
   'test/auth.test.ts', 'test/health.test.ts', 'test/produtos.test.ts',
   'test/features.test.ts', 'test/browser-services.test.ts',
   'test/nfe-xml.test.ts', 'test/nfe-fluxo.test.ts', 'test/nfe-documentos.test.ts',
-  'test/nfe-email.test.ts', 'test/nfe-backup.test.ts',
+  'test/nfe-email.test.ts', 'test/nfe-backup.test.ts', 'test/nfe-seguranca.test.ts',
 ];
 const alvos = process.argv.length > 2 ? process.argv.slice(2) : padrao;
 const t = spawnSync(process.execPath, ['--import', 'tsx', '--test', '--test-concurrency=1', ...alvos], { cwd: apiDir, env, stdio: 'inherit' });
