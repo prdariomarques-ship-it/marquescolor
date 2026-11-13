@@ -418,3 +418,16 @@ model Configuracao {
   mensagemFinal           String?
   formasPagamentoAtivas   String?
 }
+
+model MetaMensal {
+  id                String   @id @default(cuid())
+  competencia       String   @unique // YYYY-MM
+  valorMetaCentavos Int
+  cenario           String   @default("manual")
+  origem            String   @default("MANUAL")
+  atualizadoPorId   String?
+  criadoEm          DateTime @default(now())
+  atualizadoEm      DateTime @updatedAt
+
+  @@index([competencia])
+}
