@@ -22,6 +22,8 @@ export interface DocParaRevisao {
   valorIpiCentavos: number;
   valorIcmsStCentavos: number;
   valorTotalCentavos: number;
+  /** IBS + CBS + IS destacados "por fora" (NT 2025.002-RTC: somados ao total da NF). Ausente em notas sem o grupo. */
+  valorTributosPorForaCentavos?: number;
 }
 
 export interface ItemParaRevisao {
@@ -84,10 +86,10 @@ export function calcularRevisoes(doc: DocParaRevisao, itens: ItemParaRevisao[], 
       { somaItens, informado: doc.valorProdutosCentavos });
   }
   const esperadoNota = doc.valorProdutosCentavos - doc.valorDescontoCentavos + doc.valorFreteCentavos + doc.valorSeguroCentavos
-    + doc.valorOutrasCentavos + doc.valorIpiCentavos + doc.valorIcmsStCentavos;
+    + doc.valorOutrasCentavos + doc.valorIpiCentavos + doc.valorIcmsStCentavos + (doc.valorTributosPorForaCentavos ?? 0);
   if (doc.valorTotalCentavos > 0 && Math.abs(esperadoNota - doc.valorTotalCentavos) > p.toleranciaCentavos) {
     nfe('DIVERGENCIA_TOTAL_NOTA', 'ALERTA',
-      `Total da nota R$ ${brl(doc.valorTotalCentavos)} difere de produtos - desconto + frete + seguro + outras + IPI + ST = R$ ${brl(esperadoNota)} (pode haver componentes nao lidos, ex.: II/FCP).`,
+      `Total da nota R$ ${brl(doc.valorTotalCentavos)} difere de produtos - desconto + frete + seguro + outras + IPI + ST + IBS/CBS/IS por fora = R$ ${brl(esperadoNota)} (pode haver componentes nao lidos, ex.: II/FCP).`,
       { esperado: esperadoNota, informado: doc.valorTotalCentavos });
   }
 

@@ -531,6 +531,7 @@ model NfeDocument {
   valorPisCentavos       Int       @default(0)
   valorCofinsCentavos    Int       @default(0)
   valorTotalCentavos     Int       @default(0)
+  valorTributosPorForaCentavos Int @default(0) // IBS+CBS+IS por fora (NT 2025.002-RTC); 0 quando a nota nao tem o grupo
   pagamentoJson          String? // formas de pagamento + duplicatas (vencimentos)
   protocoloAutorizacao   String? // nProt do protNFe (NAO e validacao SEFAZ)
   fonteDados             String // XML | PDF_TEXTO | OCR | MULTIMODAL

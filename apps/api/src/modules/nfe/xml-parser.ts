@@ -56,6 +56,18 @@ function txt(no: unknown): string | null {
   return s === '' ? null : s;
 }
 
+/** busca recursiva do primeiro no com este nome (NT 2026.005: gTribSN fica dentro do grupo IBSCBS do item) */
+function buscarNo(no: unknown, nome: string): No | undefined {
+  if (!no || typeof no !== "object") return undefined;
+  const direto = filho(no, nome);
+  if (direto) return direto;
+  for (const v of Object.values(no as No)) {
+    const achou = Array.isArray(v) ? v.map((x) => buscarNo(x, nome)).find(Boolean) : buscarNo(v, nome);
+    if (achou) return achou;
+  }
+  return undefined;
+}
+
 function filho(no: unknown, nome: string): No | undefined {
   if (!no || typeof no !== 'object') return undefined;
   const v = (no as No)[nome];
@@ -169,7 +181,14 @@ export function lerNfeXml(bytes: Buffer): ResultadoXml {
   const ide = filho(inf, 'ide');
   const emit = filho(inf, 'emit');
   const dest = filho(inf, 'dest');
-  const icmsTot = filho(filho(inf, 'total'), 'ICMSTot');
+  const totalNo = filho(inf, 'total');
+  const icmsTot = filho(totalNo, 'ICMSTot');
+  // NT 2025.002-RTC: IBS (gIBS/vIBS), CBS (gCBS/vCBS) e IS (ISTot/vIS) sao "por fora" e entram no vNF
+  const ibsCbsTot = filho(totalNo, 'IBSCBSTot');
+  const gTribTot = buscarNo(ibsCbsTot, 'gTribSN');
+  const tributosPorFora = (cent(filho(ibsCbsTot, 'gIBS')?.vIBS) ?? 0)
+    + (cent(filho(ibsCbsTot, 'gCBS')?.vCBS) ?? 0)
+    + (cent(filho(totalNo, 'ISTot')?.vIS) ?? 0);
 
   const itens: NfeItemExtraido[] = [];
   for (const det of dets) {
@@ -186,6 +205,9 @@ export function lerNfeXml(bytes: Buffer): ResultadoXml {
       throw new XmlInvalidoError(`item ${n}: qCom/vUnCom/vProd ausentes ou nao numericos`, 'XML_ESTRUTURA');
     }
     const imp = extrairImpostoItem(filho(det, 'imposto'));
+    const gTribItem = buscarNo(filho(det, 'imposto'), 'gTribSN');
+    const tsIbs = cent(buscarNo(gTribItem, 'gIBSSN')?.vIBSSN);
+    const tsCbs = cent(buscarNo(gTribItem, 'gCBSSN')?.vCBSSN);
     itens.push({
       numeroItem: n,
       codigoFornecedor: txt(prod.cProd),
@@ -202,6 +224,9 @@ export function lerNfeXml(bytes: Buffer): ResultadoXml {
       quantidadeOriginal: q,
       valorUnitarioOriginal: vUn,
       valorTotalCentavos: vProd,
+      tributoSimplesIbsCentavos: gTribItem ? (tsIbs ?? 0) : null,
+      tributoSimplesCbsCentavos: gTribItem ? (tsCbs ?? 0) : null,
+      tributoSimplesCentavos: gTribItem ? (tsIbs ?? 0) + (tsCbs ?? 0) : null,
       freteCentavos: cent(prod.vFrete) ?? 0,
       seguroCentavos: cent(prod.vSeg) ?? 0,
       descontoCentavos: cent(prod.vDesc) ?? 0,
@@ -264,6 +289,10 @@ export function lerNfeXml(bytes: Buffer): ResultadoXml {
       pisCentavos: cent(icmsTot?.vPIS),
       cofinsCentavos: cent(icmsTot?.vCOFINS),
       notaCentavos: cent(icmsTot?.vNF),
+      tributosPorForaCentavos: tributosPorFora,
+      gTribSNIbsCentavos: gTribTot ? (cent(gTribTot.vIBSSN) ?? 0) : null,
+      gTribSNCbsCentavos: gTribTot ? (cent(gTribTot.vCBSSN) ?? 0) : null,
+      gTribSNCentavos: gTribTot ? (cent(gTribTot.vIBSSN) ?? 0) + (cent(gTribTot.vCBSSN) ?? 0) : null,
     },
     pagamentos,
     duplicatas,

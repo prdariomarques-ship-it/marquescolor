@@ -28,6 +28,10 @@ export interface NfeItemExtraido {
   ipiCentavos: number;
   pisCentavos: number;
   cofinsCentavos: number;
+  /** NT 2026.005: gTribSN do item (Simples sem regime regular). null quando o item nao tem o grupo. */
+  tributoSimplesIbsCentavos?: number | null;
+  tributoSimplesCbsCentavos?: number | null;
+  tributoSimplesCentavos?: number | null;
   /** nos de imposto originais (preservados para auditoria fiscal) */
   impostosOriginais: unknown;
   origemDados: FonteDados;
@@ -74,6 +78,10 @@ export interface NfeExtraida {
     pisCentavos: number | null;
     cofinsCentavos: number | null;
     notaCentavos: number | null;
+    tributosPorForaCentavos?: number | null;
+    gTribSNIbsCentavos?: number | null;
+    gTribSNCbsCentavos?: number | null;
+    gTribSNCentavos?: number | null;
   };
   pagamentos: PagamentoExtraido[];
   duplicatas: DuplicataExtraida[];

@@ -12,7 +12,7 @@
 // estruturados (dadosCusto) ao modulo de custo/precos.
 import type { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma.js';
-import { registrarAuditoria } from '../auditoria/auditoria.service.js';
+import { registrarAuditoria, registrarAuditoriaObrigatoria } from '../auditoria/auditoria.service.js';
 import { decimalParaCentavos, decimalParaNumero } from './decimal.js';
 import { cnpjValido, soDigitos, validarChave } from './chave.js';
 import { nfeConfig } from './config.js';
@@ -216,6 +216,7 @@ function cabecalho(extr: NfeExtraida, emitCnpj: string | null, chaveValida: bool
     valorPisCentavos: t.pisCentavos ?? 0,
     valorCofinsCentavos: t.cofinsCentavos ?? 0,
     valorTotalCentavos: t.notaCentavos ?? 0,
+    valorTributosPorForaCentavos: t.tributosPorForaCentavos ?? 0,
     pagamentoJson: JSON.stringify({ pagamentos: extr.pagamentos, duplicatas: extr.duplicatas }),
     protocoloAutorizacao: extr.protocolo?.numero ?? null,
     fonteDados: extr.fonte,
@@ -267,6 +268,17 @@ export async function reconciliarDocumento(ctx: Ctx, documentoId: string): Promi
       limiteVariacaoCustoPct: cfg.limiteVariacaoCustoPct,
       cnpjLoja: cfg.cnpjLoja,
     });
+    // DEC214-1 (decisao aprovada): UNIDADE_SEM_FATOR de item ELEGIVEL permanece aberta mesmo que o produto (compartilhado)
+    // ja esteja compativel. So a revalidacao do item dentro de aplicarEstoque fecha (207). Fechar aqui pela condicao do
+    // produto fecharia sem checar o item. Sai daqui apenas se o item deixou de ser elegivel (condicao deixou de existir).
+    // Sem reabertura nem duplicata: abrirRevisao e idempotente pela chave item+motivo.
+    const abertasUnidade = await tx.reviewQueueItem.findMany({ where: { documentoId: doc.id, motivo: MOTIVO_UNIDADE_SEM_FATOR, status: 'ABERTO' } });
+    for (const a of abertasUnidade) {
+      const it = itens2.find((i) => i.id === a.entidadeId);
+      if (it && it.produtoId && ['MAPEADO', 'CONFIRMADO'].includes(it.statusVinculo)) {
+        desejadas.push({ documentoId: doc.id, entidadeTipo: 'NFE_ITEM', entidadeId: it.id, motivo: MOTIVO_UNIDADE_SEM_FATOR, severidade: 'BLOQUEANTE', ref: '' });
+      }
+    }
     await sincronizarRevisoes(tx, ctx, doc.id, desejadas);
     await atualizarEstados(tx, ctx, doc.id);
   });
@@ -479,6 +491,25 @@ export async function aprovarDocumento(ctx: Ctx, documentoId: string, d: { obser
 
 export interface EntradaRecebimento { itemId: string; quantidadeRecebida: number }
 
+// Guarda 198: unidade da NF diferente da unidade de estoque SEM fator de conversao homologado.
+// Revisao (BLOQUEANTE, estruturada) e recusa ANTES de qualquer movimento. Justificativa de quantidade
+// (motivoDivergencia) NAO substitui fator e NAO libera o movimento.
+export const MOTIVO_UNIDADE_SEM_FATOR = 'UNIDADE_SEM_FATOR';
+type ItemUnidade = { id: string; documentoId: string; numeroItem: number; unidade: string | null; produto: { unidade: string } | null };
+
+async function bloquearUnidadeSemFator(ctx: Ctx, itens: ItemUnidade[], etapa: 'recebimento' | 'estoque') {
+  if (!itens.length) return;
+  for (const i of itens) {
+    await abrirRevisao(prisma, ctx, {
+      documentoId: i.documentoId, entidadeTipo: 'NFE_ITEM', entidadeId: i.id, motivo: MOTIVO_UNIDADE_SEM_FATOR, severidade: 'BLOQUEANTE',
+      detalhe: `Item ${i.numeroItem}: unidade da NF (${i.unidade}) difere da unidade de estoque (${i.produto?.unidade}) sem fator de conversao homologado. Nenhum movimento de estoque foi gerado. Justificativa de quantidade nao substitui fator.`,
+      dados: { etapa, unidadeNf: i.unidade, unidadeEstoque: i.produto?.unidade },
+    });
+  }
+  throw new ErroNegocio(422, 'Unidade da NF difere da unidade de estoque sem fator de conversao homologado; nenhum movimento foi gerado',
+    itens.map((i) => ({ itemId: i.id, unidadeNf: i.unidade, unidadeEstoque: i.produto?.unidade })));
+}
+
 export async function confirmarRecebimento(
   ctx: Ctx,
   deps: NfeDeps,
@@ -513,6 +544,9 @@ export async function confirmarRecebimento(
       for (const k of recebidas.keys()) if (!elegiveis.some((i) => i.id === k)) throw new ErroNegocio(400, `Item ${k} nao pertence a esta NF-e ou nao e elegivel`);
     }
     for (const [, q] of recebidas) if (!Number.isFinite(q) || q < 0) throw new ErroNegocio(400, 'Quantidade recebida invalida');
+    // Guarda 198/199 (antes de qualquer escrita). CONTRATO: revisao UNIDADE_SEM_FATOR so para item elegivel
+    // com quantidade recebida > 0. Item com quantidade zero nao e recebido, nao move estoque e nao gera revisao de unidade.
+    await bloquearUnidadeSemFator(ctx, elegiveis.filter((i) => (recebidas.get(i.id) ?? 0) > 0 && unidadeDifere(i)), 'recebimento');
     // unidade diferente conta SEMPRE como divergencia (a conversao precisa de justificativa auditavel)
     const divergentes = elegiveis.filter((i) => unidadeDifere(i) || Math.abs((recebidas.get(i.id) ?? 0) - i.quantidade) > 1e-9);
     if (divergentes.length && (d.motivoDivergencia ?? '').trim().length < 5) {
@@ -541,11 +575,28 @@ export async function confirmarRecebimento(
   return aplicarEstoque(ctx, deps, documentoId);
 }
 
+// 206: a unidade e revalidada dentro da transacao de aplicarEstoque, imediatamente antes do efeito de cada item.
+// A guarda inicial (fora da tx) continua existindo e recusa sem efeito; esta cobre a janela ate a entrada.
+function unidadeDiverge(unidadeNf: string | null, unidadeEstoque: string | null): boolean {
+  return !!unidadeNf && !!unidadeEstoque && unidadeNf.toUpperCase() !== unidadeEstoque.toUpperCase();
+}
+// Carrega os valores OBSERVADOS dentro da transacao: o rollback desfaz qualquer mudanca feita nela,
+// entao a revisao e aberta com o que foi observado, nao com uma releitura pos-rollback.
+class UnidadeDivergenteNoEfeito extends Error {
+  constructor(public readonly itemId: string, public readonly unidadeNf: string | null, public readonly unidadeEstoque: string | null) {
+    super('unidade divergente no momento do efeito');
+  }
+}
+
 /** Etapa B (retentavel): entrada em estoque a partir das quantidades JA confirmadas. Idempotente por item. */
 export async function aplicarEstoque(ctx: Ctx, deps: NfeDeps, documentoId: string) {
   const doc = await carregarDocumento(prisma, documentoId);
   if (!doc.recebimentoFisicoEm) throw new ErroNegocio(409, 'Recebimento fisico ainda nao confirmado');
   if (doc.statusEstoque === 'APLICADO') return { jaAplicado: true, documentoId };
+  // Guarda 198 (defesa em profundidade): recalcula a unidade antes de qualquer movimento
+  // mesmo contrato da guarda de recebimento: somente itens com quantidade recebida > 0
+  const itensUnidade = await prisma.nfeItem.findMany({ where: { documentoId, produtoId: { not: null }, quantidadeRecebida: { gt: 0 }, statusVinculo: { in: ['MAPEADO', 'CONFIRMADO'] } }, include: { produto: true } });
+  await bloquearUnidadeSemFator(ctx, itensUnidade.filter((i) => !!i.unidade && !!i.produto?.unidade && i.unidade.toUpperCase() !== i.produto.unidade.toUpperCase()), 'estoque');
   const ref = `NF-e ${doc.chaveAcesso ?? `${doc.serie}/${doc.numero}`}`;
   try {
     const movimentos = await prisma.$transaction(async (tx) => {
@@ -556,9 +607,21 @@ export async function aplicarEstoque(ctx: Ctx, deps: NfeDeps, documentoId: strin
       const out: { itemId: string; movimentacaoId: string; quantidade: number }[] = [];
       for (const i of itens) {
         if (i.movimentacaoEstoqueId || !i.produtoId || i.quantidadeRecebida === null || i.quantidadeRecebida <= 0) continue;
+        // 206: revalidacao da unidade NA TRANSACAO, antes do efeito deste item (produto pode ter mudado apos a guarda inicial)
+        const prodAgora = await tx.produto.findUnique({ where: { id: i.produtoId }, select: { unidade: true } });
+        if (prodAgora && unidadeDiverge(i.unidade, prodAgora.unidade)) throw new UnidadeDivergenteNoEfeito(i.id, i.unidade, prodAgora.unidade);
         const r = await deps.estoque.entrada(tx, { produtoId: i.produtoId, quantidade: i.quantidadeRecebida, documentoRef: ref, usuarioId: ctx.usuarioId ?? null });
         await tx.nfeItem.update({ where: { id: i.id }, data: { movimentacaoEstoqueId: r.movimentacaoId } });
         out.push({ itemId: i.id, movimentacaoId: r.movimentacaoId, quantidade: i.quantidadeRecebida });
+      }
+      // 207: fecha so as revisoes de unidade dos itens REVALIDADOS nesta transacao (os que receberam efeito agora).
+      // Revisao de item que nao passou pela revalidacao (ex.: quantidade zero) continua ABERTA: sua condicao nao foi checada.
+      const revalidados = out.map((o) => o.itemId);
+      if (revalidados.length) {
+        await tx.reviewQueueItem.updateMany({
+          where: { documentoId, motivo: MOTIVO_UNIDADE_SEM_FATOR, status: 'ABERTO', entidadeId: { in: revalidados } },
+          data: { status: 'RESOLVIDO', resolucao: 'UNIDADE_REVALIDADA_NA_TRANSACAO', resolvidoEm: new Date() },
+        });
       }
       await tx.nfeDocument.update({ where: { id: documentoId }, data: { statusEstoque: 'APLICADO', estoqueAtualizadoEm: new Date() } });
       // A Compra nasce JA CONFIRMADA e junto com a entrada em estoque (mesma transacao): nao existe janela
@@ -583,12 +646,24 @@ export async function aplicarEstoque(ctx: Ctx, deps: NfeDeps, documentoId: strin
         data: { status: 'RESOLVIDO', resolucao: 'RETENTATIVA_OK', resolvidoEm: new Date() },
       });
       await registrarLog(tx, ctx, { entidadeTipo: 'NFE', entidadeId: documentoId, acao: 'ESTOQUE_ATUALIZADO', mensagem: `${out.length} movimentacao(oes)`, detalhe: out });
+      // DEC214-2 (decisao aprovada): trilha de auditoria dentro da transacao. Falha aqui desfaz o movimento (rollback -> FALHA/502).
+      await registrarAuditoriaObrigatoria(tx, { usuarioId: ctx.usuarioId, acao: 'NFE_ESTOQUE_ATUALIZADO', entidade: 'NfeDocument', entidadeId: documentoId, dadosDepois: { movimentos: out }, ip: ctx.ip });
       return out;
     });
     if (movimentos === null) return { jaAplicado: true, documentoId };
-    await registrarAuditoria(prisma, { usuarioId: ctx.usuarioId, acao: 'NFE_ESTOQUE_ATUALIZADO', entidade: 'NfeDocument', entidadeId: documentoId, dadosDepois: { movimentos }, ip: ctx.ip });
     return { jaAplicado: false, documentoId, movimentos };
   } catch (e: any) {
+    if (e instanceof UnidadeDivergenteNoEfeito) {
+      // 206: tx desfeita (inclui CAS e entradas ja feitas). Sem FALHA_INTEGRACAO: e bloqueio de unidade.
+      // Revisao aberta com os valores observados na transacao (mesmo contrato de detalhe/dados da guarda 198/199).
+      await abrirRevisao(prisma, ctx, {
+        documentoId, entidadeTipo: 'NFE_ITEM', entidadeId: e.itemId, motivo: MOTIVO_UNIDADE_SEM_FATOR, severidade: 'BLOQUEANTE',
+        detalhe: `Item: unidade da NF (${e.unidadeNf}) difere da unidade de estoque (${e.unidadeEstoque}) observada na transacao de aplicacao. Nenhum movimento de estoque foi gerado. Justificativa de quantidade nao substitui fator.`,
+        dados: { etapa: 'estoque', revalidadoNaTransacao: true, unidadeNf: e.unidadeNf, unidadeEstoque: e.unidadeEstoque },
+      });
+      throw new ErroNegocio(422, 'Unidade da NF difere da unidade de estoque sem fator de conversao homologado; nenhum movimento foi gerado',
+        [{ itemId: e.itemId, unidadeNf: e.unidadeNf, unidadeEstoque: e.unidadeEstoque }]);
+    }
     // transacao desfeita: nenhum saldo mudou. Recebimento fisico continua registrado.
     await prisma.nfeDocument.update({ where: { id: documentoId }, data: { statusEstoque: 'FALHA' } });
     await registrarLog(prisma, ctx, { entidadeTipo: 'NFE', entidadeId: documentoId, acao: 'ESTOQUE_FALHA', status: 'ERROR', mensagem: String(e?.message ?? e) });

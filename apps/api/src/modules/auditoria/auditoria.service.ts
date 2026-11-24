@@ -33,3 +33,24 @@ export async function registrarAuditoria(
     console.error('Erro ao registrar auditoria:', e);
   }
 }
+
+/**
+ * DEC214-2: auditoria OBRIGATORIA. Sem try/catch: deve ser chamada dentro da transacao que move o estoque,
+ * para que uma falha de trilha desfaca o movimento (rollback) em vez de deixar movimento sem registro.
+ */
+export async function registrarAuditoriaObrigatoria(
+  tx: PrismaLike,
+  dados: RegistrarAuditoriaInput,
+): Promise<void> {
+  await (tx as any).auditoria.create({
+    data: {
+      usuarioId: dados.usuarioId || null,
+      acao: dados.acao,
+      entidade: dados.entidade,
+      entidadeId: dados.entidadeId || null,
+      dadosAntes: dados.dadosAntes ? JSON.stringify(dados.dadosAntes) : null,
+      dadosDepois: dados.dadosDepois ? JSON.stringify(dados.dadosDepois) : null,
+      ip: dados.ip || null,
+    },
+  });
+}

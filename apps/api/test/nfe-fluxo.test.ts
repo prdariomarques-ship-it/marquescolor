@@ -470,11 +470,11 @@ test('unidade da NF diferente da do produto: recebimentoIntegral e recusado; exi
   // quantidade explicita na unidade do produto, mas ainda exige a justificativa da conversao
   const semMotivo = await post(`/api/nfe/documentos/${docId}/confirmar-recebimento`, gerente, { itens: [{ itemId, quantidadeRecebida: 6 }] });
   assert.equal(semMotivo.statusCode, 422);
+  // Justificativa de texto NAO e fator de conversao (regra da serie LEAO, teste 196): sem fator homologado, continua bloqueado.
   const ok = await post(`/api/nfe/documentos/${docId}/confirmar-recebimento`, gerente, { itens: [{ itemId, quantidadeRecebida: 6 }], motivoDivergencia: 'conversao: 1 CX = 6 UN' });
-  assert.equal(ok.statusCode, 200, ok.body);
-  assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).estoqueAtual, 6);
-  const rev = await prisma.reviewQueueItem.findFirstOrThrow({ where: { documentoId: docId, motivo: 'DIVERGENCIA_QUANTIDADE_RECEBIMENTO' } });
-  assert.match(rev.detalhe ?? '', /1 CX.*6 UN/);
+  assert.equal(ok.statusCode, 422, ok.body);
+  assert.equal((await prisma.produto.findUniqueOrThrow({ where: { id: p.id } })).estoqueAtual, 0);
+  assert.equal(await prisma.movimentacaoEstoque.count(), 0);
 });
 
 test('evento fiscal nao-cancelamento (carta de correcao 110110) sobrevive a reconciliacao e a aprovacao; exige decisao humana', async () => {
