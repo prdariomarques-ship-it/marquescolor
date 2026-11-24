@@ -21,6 +21,7 @@ import Vendas from './modules/vendas/Vendas';
 import Caixa from './modules/caixa/Caixa';
 import Configuracoes from './modules/config/Configuracoes';
 import Compras from './modules/compras/Compras';
+import DocumentosFiscais from './modules/nfe/DocumentosFiscais';
 import Orcamentos from './modules/orcamentos/Orcamentos';
 import Financeiro from './modules/financeiro/Financeiro';
 import Relatorios from './modules/relatorios/Relatorios';
@@ -67,6 +68,7 @@ export default function App() {
               <Route path="/compras" element={
                 <ProtectedRoute papel="ADMIN"><Compras /></ProtectedRoute>
               } />
+              <Route path="/documentos-fiscais" element={<DocumentosFiscais />} />
               <Route path="/orcamentos" element={<Orcamentos />} />
               <Route path="/financeiro" element={<Financeiro />} />
               <Route path="/relatorios" element={<Relatorios />} />

@@ -12,7 +12,9 @@ const __dirname = path.dirname(__filename);
 // (src/lib -> src -> apps/api -> maxcolor)
 const monorepoRoot = path.resolve(__dirname, '..', '..', '..', '..');
 const envPath = path.join(monorepoRoot, '.env');
-if (fs.existsSync(envPath)) {
+// Em testes (NODE_ENV=test) o .env da loja NUNCA e carregado: o runner de testes
+// fornece um banco isolado via variaveis de ambiente.
+if (process.env.NODE_ENV !== 'test' && fs.existsSync(envPath)) {
   loadEnv({ path: envPath, override: true });
 }
 

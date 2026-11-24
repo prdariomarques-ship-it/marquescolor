@@ -1,6 +1,6 @@
 import { useAuth } from '../stores/auth';
 import { useNavigate, Link, useLocation, Outlet } from 'react-router-dom';
-import { LogOut, LayoutDashboard, Users, Package, Tag, FolderTree, UserCircle, Truck, Boxes, History, ShoppingCart, Receipt, Wallet, Settings, FileText, TrendingUp, ClipboardList, Banknote, DatabaseBackup } from 'lucide-react';
+import { LogOut, LayoutDashboard, Users, Package, Tag, FolderTree, UserCircle, Truck, Boxes, History, ShoppingCart, Receipt, Wallet, Settings, FileText, TrendingUp, ClipboardList, Banknote, DatabaseBackup, FileScan } from 'lucide-react';
 import BackupScheduler from '../modules/backup/BackupScheduler';
 
 export function Layout() {
@@ -24,6 +24,7 @@ export function Layout() {
     { to: '/estoque', label: 'Estoque', icon: Boxes, papeis: ['ADMIN', 'GERENTE', 'VENDEDOR', 'CAIXA'] },
     { to: '/estoque/movimentacoes', label: 'Movimentacoes', icon: History, papeis: ['ADMIN', 'GERENTE', 'VENDEDOR', 'CAIXA'] },
     { to: '/compras', label: 'Compras', icon: ShoppingCart, papeis: ['ADMIN', 'GERENTE'] },
+    { to: '/documentos-fiscais', label: 'Documentos fiscais', icon: FileScan, papeis: ['ADMIN', 'GERENTE'] },
     { to: '/orcamentos', label: 'Orcamentos', icon: ClipboardList, papeis: ['ADMIN', 'GERENTE', 'VENDEDOR', 'CAIXA'] },
     { to: '/clientes', label: 'Clientes', icon: UserCircle, papeis: ['ADMIN', 'GERENTE', 'VENDEDOR', 'CAIXA'] },
     { to: '/fornecedores', label: 'Fornecedores', icon: Truck, papeis: ['ADMIN', 'GERENTE'] },
